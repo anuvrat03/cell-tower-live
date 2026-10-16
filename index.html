@@ -14,17 +14,17 @@
         }
 
         html, body {
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #e5e3df; /* Map background fallback */
+            background-color: #f0f0f0;
         }
 
-        /* Map takes 100% of the screen */
+        /* Direct full screen map view */
         #map {
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             position: absolute;
             top: 0;
             left: 0;
@@ -38,19 +38,19 @@
             left: 0;
             width: 100%;
             z-index: 1000;
-            pointer-events: none; /* Allows clicking through to the map */
-            padding: 10px;
+            pointer-events: none; /* Allows touch to pass through to map */
+            padding: 12px;
         }
 
-        /* Fixed Top Panel */
+        /* Fixed Black Header Panel */
         .status-panel {
-            pointer-events: auto; /* Makes panel buttons clickable */
-            background: rgba(15, 23, 42, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            pointer-events: auto; /* Enables clicking panel buttons */
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 12px;
-            padding: 10px 14px;
+            padding: 12px 16px;
             color: #ffffff;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(8px);
             max-width: 600px;
             margin: 0 auto;
@@ -60,13 +60,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
+            font-size: 15px;
             font-weight: bold;
             margin-bottom: 6px;
         }
 
         .connection-status {
-            font-size: 11px;
+            font-size: 12px;
             color: #4ade80;
             margin-bottom: 4px;
             display: flex;
@@ -75,12 +75,12 @@
         }
 
         .status-dot {
-            width: 7px;
-            height: 7px;
+            width: 8px;
+            height: 8px;
             background-color: #4ade80;
             border-radius: 50%;
             display: inline-block;
-            box-shadow: 0 0 6px #4ade80;
+            box-shadow: 0 0 8px #4ade80;
         }
 
         .location-info {
@@ -95,7 +95,7 @@
         .coords {
             font-family: monospace;
             background: rgba(255, 255, 255, 0.1);
-            padding: 1px 6px;
+            padding: 2px 6px;
             border-radius: 4px;
             color: #38bdf8;
         }
@@ -104,7 +104,7 @@
             background: #1e293b;
             color: #fff;
             border: 1px solid #475569;
-            padding: 4px 10px;
+            padding: 5px 10px;
             border-radius: 6px;
             font-size: 11px;
             cursor: pointer;
@@ -117,10 +117,10 @@
 </head>
 <body>
 
-    <!-- Map Area -->
+    <!-- Map Container -->
     <div id="map"></div>
 
-    <!-- Fixed Top Panel Overlay -->
+    <!-- Fixed Header Overlay Panel -->
     <div class="panel-overlay-container">
         <div class="status-panel">
             <div class="panel-header">
@@ -128,11 +128,11 @@
                 <button class="locate-btn" id="recenterBtn">My Location</button>
             </div>
             <div class="connection-status">
-                <span class="status-dot"></span> <span id="statusText">ACQUIRING GPS...</span>
+                <span class="status-dot"></span> <span id="statusText">LOADING MAP TILES...</span>
             </div>
             <div class="location-info">
-                <span id="locationText">📍 Locating device...</span>
-                <span class="coords" id="coordsText">--.----°, --.----°</span>
+                <span id="locationText">📍 Initializing view...</span>
+                <span class="coords" id="coordsText">17.2326°, 78.5899°</span>
             </div>
         </div>
     </div>
@@ -140,32 +140,31 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Default center set to Bongulur / Telangana region
+        // Fallback coordinates (Bongulur region)
         const defaultLat = 17.2326;
         const defaultLng = 78.5899;
 
-        // Initialize Map
+        // Initialize Map immediately
         const map = L.map('map', { zoomControl: false }).setView([defaultLat, defaultLng], 15);
 
-        // Position zoom controls at bottom right
+        // Add Zoom controls at the bottom right
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // Add Map Tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Add OpenStreetMap tile layer
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // Force map to resize and draw tiles properly
-        setTimeout(() => {
-            map.invalidateSize();
-        }, 300);
-
         let userMarker = null;
         let accuracyCircle = null;
+        let isFirstGPSFix = true;
 
-        function updateMapLocation(lat, lng, accuracy) {
-            map.setView([lat, lng], 16);
+        function updateView(lat, lng, accuracy, sourceText) {
+            if (isFirstGPSFix) {
+                map.setView([lat, lng], 16);
+                isFirstGPSFix = false;
+            }
 
             if (userMarker) {
                 userMarker.setLatLng([lat, lng]);
@@ -173,7 +172,7 @@
                 accuracyCircle.setRadius(accuracy || 25);
             } else {
                 userMarker = L.marker([lat, lng]).addTo(map)
-                    .bindPopup("<b>Current Location</b>").openPopup();
+                    .bindPopup("<b>Current Location</b>");
                 accuracyCircle = L.circle([lat, lng], { 
                     radius: accuracy || 25, 
                     color: '#38bdf8', 
@@ -183,42 +182,53 @@
             }
 
             document.getElementById('statusText').innerText = "LIVE GPS CONNECTED";
-            document.getElementById('locationText').innerText = `📍 Travel Location (~${Math.round(accuracy || 0)}m accuracy)`;
+            document.getElementById('locationText').innerText = `📍 ${sourceText} (~${Math.round(accuracy || 0)}m)`;
             document.getElementById('coordsText').innerText = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
         }
 
-        // Live Geolocation Tracking
+        // Try to get GPS position immediately, fallback gracefully to default view if blocked
         if ("geolocation" in navigator) {
-            navigator.geolocation.watchPosition(
+            navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    updateMapLocation(
-                        position.coords.latitude, 
-                        position.coords.longitude, 
-                        position.coords.accuracy
-                    );
+                    updateView(position.coords.latitude, position.coords.longitude, position.coords.accuracy, "Travel GPS Active");
                 },
                 (error) => {
-                    console.warn("GPS Error:", error.message);
-                    document.getElementById('statusText').innerText = "DEFAULT VIEW (GPS Off/Denied)";
-                    document.getElementById('locationText').innerText = "📍 Showing Default Region";
-                    document.getElementById('coordsText').innerText = `${defaultLat}°, ${defaultLng}°`;
+                    console.warn("Initial GPS lock failed:", error.message);
+                    document.getElementById('statusText').innerText = "USING DEFAULT VIEW";
+                    document.getElementById('locationText').innerText = "📍 Tap 'My Location' to enable GPS";
                 },
-                {
-                    enableHighAccuracy: true,
-                    maximumAge: 5000,
-                    timeout: 10000
-                }
+                { timeout: 8000, enableHighAccuracy: true }
+            );
+
+            // Continuously watch position as you travel
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    updateView(position.coords.latitude, position.coords.longitude, position.coords.accuracy, "Travel GPS Active");
+                },
+                null,
+                { enableHighAccuracy: true, maximumAge: 5000 }
             );
         } else {
             document.getElementById('statusText').innerText = "GPS NOT SUPPORTED";
         }
 
-        // Re-center button action
+        // Force map resize check to guarantee tiles render properly
+        window.addEventListener('load', () => {
+            map.invalidateSize();
+        });
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 500);
+
+        // Re-center button click handler
         document.getElementById('recenterBtn').addEventListener('click', () => {
             if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    updateMapLocation(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
-                });
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+                    updateView(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "Re-centered");
+                }, () => {
+                    alert("Please ensure location permissions are enabled in your browser settings.");
+                }, { enableHighAccuracy: true });
             }
         });
     </script>
