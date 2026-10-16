@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cell Tower Finder</title>
-    <!-- Leaflet CSS for Map -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {
@@ -21,7 +21,7 @@
             background-color: #121212;
         }
 
-        /* Map fills entire screen */
+        /* Map fills the screen completely */
         #map {
             width: 100%;
             height: 100%;
@@ -31,7 +31,7 @@
             z-index: 1;
         }
 
-        /* Overlay container allows zooming/panning through it */
+        /* Overlay container lets touch/zoom pass through to the map */
         .panel-overlay-container {
             position: absolute;
             top: 0;
@@ -39,19 +39,19 @@
             width: 100%;
             z-index: 1000;
             pointer-events: none;
-            padding: 10px;
+            padding: 12px;
         }
 
-        /* Fixed Black Panel Card */
+        /* Fixed Black Header Panel */
         .status-panel {
             pointer-events: auto;
-            background: rgba(18, 24, 38, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 12px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(8px);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
             max-width: 600px;
             margin: 0 auto;
         }
@@ -60,18 +60,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
             margin-bottom: 6px;
         }
 
-        .tower-id-tag {
-            color: #38bdf8;
-            font-family: monospace;
-        }
-
         .connection-status {
-            font-size: 12px;
+            font-size: 11px;
             color: #4ade80;
             margin-bottom: 4px;
             display: flex;
@@ -90,7 +85,7 @@
 
         .location-info {
             font-size: 11px;
-            color: #94a3b8;
+            color: #cbd5e1;
             display: flex;
             justify-content: space-between;
             flex-wrap: wrap;
@@ -99,13 +94,13 @@
 
         .coords {
             font-family: monospace;
-            background: rgba(255, 255, 255, 0.08);
-            padding: 1px 5px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 6px;
             border-radius: 4px;
             color: #38bdf8;
         }
 
-        .auto-btn {
+        .locate-btn {
             background: #1e293b;
             color: #fff;
             border: 1px solid #475569;
@@ -114,30 +109,30 @@
             font-size: 11px;
             cursor: pointer;
         }
-        
-        .auto-btn:active {
+
+        .locate-btn:active {
             background: #334155;
         }
     </style>
 </head>
 <body>
 
-    <!-- Map Container -->
+    <!-- Map Area -->
     <div id="map"></div>
 
-    <!-- Fixed Header Overlay Panel -->
+    <!-- Fixed Top Panel -->
     <div class="panel-overlay-container">
         <div class="status-panel">
             <div class="panel-header">
                 <span>📶 Cell Tower Finder</span>
-                <button class="auto-btn" id="locateBtn">My Location</button>
+                <button class="locate-btn" id="recenterBtn">My Location</button>
             </div>
             <div class="connection-status">
-                <span class="status-dot"></span> <span id="connText">CONNECTING TO GPS...</span>
+                <span class="status-dot"></span> <span id="statusText">REQUESTING GPS PERMISSION...</span>
             </div>
             <div class="location-info">
-                <span id="locName">📍 Acquiring location...</span>
-                <span class="coords" id="coordText">--.----°, --.----°</span>
+                <span id="locationText">📍 Waiting for satellite lock...</span>
+                <span class="coords" id="coordsText">--.----°, --.----°</span>
             </div>
         </div>
     </div>
@@ -145,70 +140,83 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Initialize Map (default fallback center)
-        const map = L.map('map', { zoomControl: false }).setView([17.2326, 78.5899], 15);
+        // Default starting view (fallback if GPS is disabled)
+        const map = L.map('map', { zoomControl: false }).setValue = 17;
+        map.setView([17.2326, 78.5899], 17); // Initial target scale set for comfort
 
-        // Add Zoom control to bottom right so it doesn't clash with top panel
+        // Place zoom controls at bottom right so they don't overlap the header
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // OpenStreetMap Tile Layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        let marker = null;
-        let accuracyCircle = null;
+        let userMarker = null;
+        let accuracyRadius = null;
+        let hasCenteredOnce = false;
 
-        // Function to update position on map & panel
-        function updatePosition(lat, lng, accuracy) {
-            map.setView([lat, lng], 16);
-
-            if (marker) {
-                marker.setLatLng([lat, lng]);
-                accuracyCircle.setLatLng([lat, lng]);
-                accuracyCircle.setRadius(accuracy || 30);
-            } else {
-                marker = L.marker([lat, lng]).addTo(map)
-                    .bindPopup("<b>Current Location</b>").openPopup();
-                accuracyCircle = L.circle([lat, lng], { radius: accuracy || 30, color: '#38bdf8', fillOpacity: 0.15 }).addTo(map);
+        function updateMapLocation(lat, lng, accuracy) {
+            // Set comfortable travel scale zoom level (17)
+            if (!hasCenteredOnce) {
+                map.setView([lat, lng], 17);
+                hasCenteredOnce = true;
             }
 
-            // Update panel text
-            document.getElementById('coordText').innerText = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
-            document.getElementById('connText').innerText = `CONNECTED: Active GPS Tracking`;
-            document.getElementById('locName').innerText = `📍 Live Location (Accuracy: ~${Math.round(accuracy || 0)}m)`;
+            if (userMarker) {
+                userMarker.setLatLng([lat, lng]);
+                accuracyRadius.setLatLng([lat, lng]);
+                accuracyRadius.setRadius(accuracy || 25);
+            } else {
+                userMarker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup("<b>You are here</b>").openPopup();
+                accuracyRadius = L.circle([lat, lng], { 
+                    radius: accuracy || 25, 
+                    color: '#38bdf8', 
+                    fillColor: '#38bdf8', 
+                    fillOpacity: 0.2 
+                }).addTo(map);
+            }
+
+            // Update UI text
+            document.getElementById('statusText').innerText = "LIVE GPS CONNECTED";
+            document.getElementById('locationText').innerText = `📍 Travel Mode Active (~${Math.round(accuracy || 0)}m accuracy)`;
+            document.getElementById('coordsText').innerText = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
         }
 
-        // Request user browser geolocation on load for travel tracking
+        // Trigger Live Geolocation Tracking
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition(
                 (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
-                    updatePosition(lat, lng, accuracy);
+                    updateMapLocation(
+                        position.coords.latitude, 
+                        position.coords.longitude, 
+                        position.coords.accuracy
+                    );
                 },
                 (error) => {
-                    console.warn("Geolocation error or permission denied:", error.message);
-                    document.getElementById('connText').innerText = `GPS ERROR - Using Default Zone`;
-                    document.getElementById('locName').innerText = `📍 Default View`;
+                    console.warn("GPS Error:", error.message);
+                    document.getElementById('statusText').innerText = "GPS BLOCKED / UNAVAILABLE";
+                    document.getElementById('locationText').innerText = "📍 Check browser location settings";
                 },
                 {
                     enableHighAccuracy: true,
-                    maximumAge: 10000,
-                    timeout: 15000
+                    maximumAge: 5000,
+                    timeout: 10000
                 }
             );
         } else {
-            alert("Geolocation is not supported by your browser.");
+            document.getElementById('statusText').innerText = "GPS NOT SUPPORTED";
         }
 
-        // Button to manually re-center on current position
-        document.getElementById('locateBtn').addEventListener('click', () => {
+        // Manual Re-center Button
+        document.getElementById('recenterBtn').addEventListener('click', () => {
             navigator.geolocation.getCurrentPosition((position) => {
-                updatePosition(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
-            });
+                map.setView([position.coords.latitude, position.coords.longitude], 17);
+                updateMapLocation(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+            }, () => {
+                alert("Unable to fetch current location. Please check phone GPS permissions.");
+            }, { enableHighAccuracy: true });
         });
     </script>
 </body>
