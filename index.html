@@ -14,44 +14,44 @@
         }
 
         html, body {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #e5e3df; /* Map background fallback */
         }
 
-        /* Map fills the screen completely */
+        /* Map takes 100% of the screen */
         #map {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             position: absolute;
             top: 0;
             left: 0;
             z-index: 1;
         }
 
-        /* Overlay container lets touch/zoom pass through to the map */
+        /* Overlay container for status panel */
         .panel-overlay-container {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             z-index: 1000;
-            pointer-events: none;
-            padding: 12px;
+            pointer-events: none; /* Allows clicking through to the map */
+            padding: 10px;
         }
 
-        /* Fixed Black Header Panel */
+        /* Fixed Top Panel */
         .status-panel {
-            pointer-events: auto;
+            pointer-events: auto; /* Makes panel buttons clickable */
             background: rgba(15, 23, 42, 0.92);
             border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 12px;
             padding: 10px 14px;
             color: #ffffff;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(8px);
             max-width: 600px;
             margin: 0 auto;
         }
@@ -120,7 +120,7 @@
     <!-- Map Area -->
     <div id="map"></div>
 
-    <!-- Fixed Top Panel -->
+    <!-- Fixed Top Panel Overlay -->
     <div class="panel-overlay-container">
         <div class="status-panel">
             <div class="panel-header">
@@ -128,10 +128,10 @@
                 <button class="locate-btn" id="recenterBtn">My Location</button>
             </div>
             <div class="connection-status">
-                <span class="status-dot"></span> <span id="statusText">REQUESTING GPS PERMISSION...</span>
+                <span class="status-dot"></span> <span id="statusText">ACQUIRING GPS...</span>
             </div>
             <div class="location-info">
-                <span id="locationText">📍 Waiting for satellite lock...</span>
+                <span id="locationText">📍 Locating device...</span>
                 <span class="coords" id="coordsText">--.----°, --.----°</span>
             </div>
         </div>
@@ -140,37 +140,41 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Default starting view (fallback if GPS is disabled)
-        const map = L.map('map', { zoomControl: false }).setValue = 17;
-        map.setView([17.2326, 78.5899], 17); // Initial target scale set for comfort
+        // Default center set to Bongulur / Telangana region
+        const defaultLat = 17.2326;
+        const defaultLng = 78.5899;
 
-        // Place zoom controls at bottom right so they don't overlap the header
+        // Initialize Map
+        const map = L.map('map', { zoomControl: false }).setView([defaultLat, defaultLng], 15);
+
+        // Position zoom controls at bottom right
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+        // Add Map Tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
+        // Force map to resize and draw tiles properly
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 300);
+
         let userMarker = null;
-        let accuracyRadius = null;
-        let hasCenteredOnce = false;
+        let accuracyCircle = null;
 
         function updateMapLocation(lat, lng, accuracy) {
-            // Set comfortable travel scale zoom level (17)
-            if (!hasCenteredOnce) {
-                map.setView([lat, lng], 17);
-                hasCenteredOnce = true;
-            }
+            map.setView([lat, lng], 16);
 
             if (userMarker) {
                 userMarker.setLatLng([lat, lng]);
-                accuracyRadius.setLatLng([lat, lng]);
-                accuracyRadius.setRadius(accuracy || 25);
+                accuracyCircle.setLatLng([lat, lng]);
+                accuracyCircle.setRadius(accuracy || 25);
             } else {
                 userMarker = L.marker([lat, lng]).addTo(map)
-                    .bindPopup("<b>You are here</b>").openPopup();
-                accuracyRadius = L.circle([lat, lng], { 
+                    .bindPopup("<b>Current Location</b>").openPopup();
+                accuracyCircle = L.circle([lat, lng], { 
                     radius: accuracy || 25, 
                     color: '#38bdf8', 
                     fillColor: '#38bdf8', 
@@ -178,13 +182,12 @@
                 }).addTo(map);
             }
 
-            // Update UI text
             document.getElementById('statusText').innerText = "LIVE GPS CONNECTED";
-            document.getElementById('locationText').innerText = `📍 Travel Mode Active (~${Math.round(accuracy || 0)}m accuracy)`;
+            document.getElementById('locationText').innerText = `📍 Travel Location (~${Math.round(accuracy || 0)}m accuracy)`;
             document.getElementById('coordsText').innerText = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
         }
 
-        // Trigger Live Geolocation Tracking
+        // Live Geolocation Tracking
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition(
                 (position) => {
@@ -196,8 +199,9 @@
                 },
                 (error) => {
                     console.warn("GPS Error:", error.message);
-                    document.getElementById('statusText').innerText = "GPS BLOCKED / UNAVAILABLE";
-                    document.getElementById('locationText').innerText = "📍 Check browser location settings";
+                    document.getElementById('statusText').innerText = "DEFAULT VIEW (GPS Off/Denied)";
+                    document.getElementById('locationText').innerText = "📍 Showing Default Region";
+                    document.getElementById('coordsText').innerText = `${defaultLat}°, ${defaultLng}°`;
                 },
                 {
                     enableHighAccuracy: true,
@@ -209,15 +213,15 @@
             document.getElementById('statusText').innerText = "GPS NOT SUPPORTED";
         }
 
-        // Manual Re-center Button
+        // Re-center button action
         document.getElementById('recenterBtn').addEventListener('click', () => {
-            navigator.geolocation.getCurrentPosition((position) => {
-                map.setView([position.coords.latitude, position.coords.longitude], 17);
-                updateMapLocation(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
-            }, () => {
-                alert("Unable to fetch current location. Please check phone GPS permissions.");
-            }, { enableHighAccuracy: true });
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    updateMapLocation(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+                });
+            }
         });
     </script>
 </body>
 </html>
+
