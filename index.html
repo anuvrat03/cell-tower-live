@@ -30,7 +30,7 @@
       overflow: hidden;
     }
 
-    /* Full screen map */
+    /* Full screen map with large text scaling filter */
     #map {
       position: absolute;
       top: 0;
@@ -39,6 +39,9 @@
       height: 100vh;
       z-index: 1;
       background: #e2e8f0;
+      /* Enlarge map graphics and text labels for high visibility */
+      transform: scale(1.15);
+      transform-origin: center;
     }
 
     /* Fixed Top Panel */
@@ -73,7 +76,7 @@
     }
 
     .brand-title {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
       color: #ffffff;
     }
@@ -90,7 +93,7 @@
       border: 1px solid #334155;
       color: #ffffff;
       font-family: monospace;
-      font-size: 14px;
+      font-size: 15px;
       padding: 10px 12px;
       border-radius: 8px;
       outline: none;
@@ -104,7 +107,7 @@
       background: #1e293b;
       border: 1px solid #475569;
       color: #f1f5f9;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       padding: 10px 12px;
       border-radius: 8px;
@@ -116,7 +119,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       padding-top: 2px;
     }
@@ -129,37 +132,37 @@
     }
 
     .dot-pulse {
-      width: 9px;
-      height: 9px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: #00FF66;
       box-shadow: 0 0 10px #00FF66;
       display: inline-block;
     }
 
-    /* CLEAR TRAVEL LABELS FOR TOWERS */
+    /* MUCH LARGER TOWER LABELS FOR COMFORTABLE READING */
     .connected-tower-box {
       background: #090d16;
-      border: 2.5px solid #00FF66;
+      border: 3px solid #00FF66;
       color: #fff;
-      padding: 6px 10px;
-      border-radius: 10px;
-      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 14px;
       font-weight: bold;
-      box-shadow: 0 0 15px rgba(0, 255, 102, 0.6);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.7);
       white-space: nowrap;
       text-align: center;
     }
 
     .muted-tower-box {
       background: #1e293b;
-      border: 1.5px solid #64748b;
-      color: #cbd5e1;
-      padding: 4px 8px;
-      border-radius: 8px;
-      font-size: 11px;
+      border: 2px solid #64748b;
+      color: #f1f5f9;
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 13px;
       font-weight: 600;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       white-space: nowrap;
       text-align: center;
     }
@@ -167,13 +170,13 @@
     /* User Location Marker */
     @keyframes user-pulse {
       0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
-      70% { box-shadow: 0 0 0 14px rgba(56, 189, 248, 0); }
+      70% { box-shadow: 0 0 0 16px rgba(56, 189, 248, 0); }
       100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
     }
 
     .user-marker-blue {
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       background: #0284c7;
       border: 3px solid #ffffff;
       border-radius: 50%;
@@ -192,8 +195,8 @@
     }
 
     .fab {
-      width: 48px;
-      height: 48px;
+      width: 50px;
+      height: 50px;
       border-radius: 12px;
       background: #0f172a;
       border: 1px solid #334155;
@@ -203,7 +206,7 @@
       justify-content: center;
       box-shadow: 0 8px 18px rgba(0,0,0,0.5);
       cursor: pointer;
-      font-size: 18px;
+      font-size: 20px;
     }
   </style>
 </head>
@@ -217,7 +220,7 @@
       <div class="top-panel">
         <div class="brand-row">
           <div class="brand-title">📶 Cell Tower Finder</div>
-          <span id="towerCountLabel" style="color: #94a3b8; font-size:12px;">15 sites nearby</span>
+          <span id="towerCountLabel" style="color: #94a3b8; font-size:13px;">15 sites nearby</span>
         </div>
 
         <div class="cell-input-row">
@@ -267,7 +270,7 @@
     }
 
     function initMap() {
-      map = L.map('map', { zoomControl: false }).setView([userCoords.lat, userCoords.lon], 16);
+      map = L.map('map', { zoomControl: false }).setView([userCoords.lat, userCoords.lon], 17);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -279,8 +282,8 @@
       const userIcon = L.divIcon({
         className: '',
         html: '<div class="user-marker-blue"></div>',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
       });
 
       userMarker = L.marker([userCoords.lat, userCoords.lon], { icon: userIcon }).addTo(map);
@@ -324,7 +327,7 @@
       allTowers.forEach(t => {
         const isConnected = connectedTower && (t.id === connectedTower.id);
         
-        // Large, clear text labels showing carrier, cell ID, and distance so switchovers are obvious
+        // Large, highly readable text layout for easy glanceability while traveling
         const htmlContent = isConnected ? 
           `<div class="connected-tower-box">🟢 CONNECTED<br>${t.carrier}<br>ID: ${t.cellid} (${t.distanceMeters}m)</div>` :
           `<div class="muted-tower-box">📡 ${t.carrier}<br>ID: ${t.cellid} · ${t.distanceMeters}m</div>`;
@@ -332,8 +335,8 @@
         const icon = L.divIcon({
           className: '',
           html: htmlContent,
-          iconSize: [140, 45],
-          iconAnchor: [70, 22]
+          iconSize: [160, 55],
+          iconAnchor: [80, 27]
         });
 
         const marker = L.marker([t.lat, t.lon], { icon }).addTo(map);
@@ -355,7 +358,7 @@
 
         connectedLine = L.polyline([[userCoords.lat, userCoords.lon], [connectedTower.lat, connectedTower.lon]], {
           color: '#00FF66',
-          weight: 3.5,
+          weight: 4,
           dashArray: '6, 6'
         }).addTo(map);
       } else {
@@ -409,7 +412,6 @@
       }
     });
 
-    // Fit map bounds to show your location and surrounding towers simultaneously
     document.getElementById('btnFitAll').addEventListener('click', () => {
       if (towerMarkers.length > 0) {
         const group = new L.featureGroup([userMarker, ...towerMarkers]);
@@ -418,7 +420,7 @@
     });
 
     document.getElementById('btnRecenter').addEventListener('click', () => {
-      map.setView([userCoords.lat, userCoords.lon], 16, { animate: true });
+      map.setView([userCoords.lat, userCoords.lon], 17, { animate: true });
     });
 
     window.onload = initMap;
