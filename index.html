@@ -1,1300 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Mobile Cell Tower Finder</title>
-  <meta name="description" content="Live mobile cell tower finder with GPS location, neon green connected tower tracking, and high-clarity interactive map.">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cell Tower Finder</title>
+    <!-- Leaflet CSS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+        }
 
-  <style>
-    :root {
-      --neon-connected: #00FF66;
-      --muted-tower: #475569;
-      --user-blue: #0284c7;
-      --user-blue-glow: #38bdf8;
-      --bg-dark: #090d16;
-      --card-bg: rgba(15, 23, 42, 0.94);
-      --card-border: rgba(51, 65, 85, 0.85);
-      --text: #f1f5f9;
-      --text-muted: #94a3b8;
-    }
+        /* Map fills entire screen */
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      -webkit-tap-highlight-color: transparent;
-    }
+        /* Overlay container allows zooming/panning through it */
+        .panel-overlay-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            pointer-events: none;
+            padding: 10px;
+        }
 
-    html, body {
-      width: 100%;
-      height: 100%;
-      height: 100vh;
-      height: 100dvh;
-      overflow: hidden;
-      background-color: var(--bg-dark);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: var(--text);
-    }
+        /* Fixed Black Panel Card */
+        .status-panel {
+            pointer-events: auto;
+            background: rgba(18, 24, 38, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            max-width: 600px;
+            margin: 0 auto;
+        }
 
-    #app {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
 
-    /* 1. Map container filling 100% of the screen/viewport underneath */
-    #map {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-      background-color: var(--bg-dark);
-    }
+        .tower-id-tag {
+            color: #38bdf8;
+            font-family: monospace;
+        }
 
-    /* 2. Floating Status Panel Overlay at Top (top: 10px, left: 10px, right: 10px, z-index: 1000) */
-    .status-panel-overlay {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      right: 10px;
-      z-index: 1000;
-      pointer-events: none;
-      display: flex;
-      justify-content: center;
-    }
+        .connection-status {
+            font-size: 12px;
+            color: #4ade80;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
 
-    /* Panel Card itself has pointer-events: auto so its internal buttons and text remain fully interactive */
-    .status-panel-card {
-      pointer-events: auto;
-      width: 100%;
-      max-width: 640px;
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.75);
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      user-select: none;
-    }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px #4ade80;
+        }
 
-    /* Top Row: Wordmark & Quick Actions */
-    .panel-top-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      border-bottom: 1px solid rgba(51, 65, 85, 0.6);
-      padding-bottom: 6px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-weight: 800;
-      font-size: 13.5px;
-      color: #fff;
-    }
-    .brand-icon {
-      width: 24px;
-      height: 24px;
-      border-radius: 7px;
-      background: #020617;
-      border: 1px solid rgba(0, 255, 102, 0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--neon-connected);
-      box-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
-    }
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .btn-action {
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #f1f5f9;
-      height: 28px;
-      padding: 0 9px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-action:hover { background: #334155; }
-    .btn-action:active { transform: scale(0.96); }
+        .location-info {
+            font-size: 11px;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
 
-    /* Middle Row: Cell ID Input & Auto Connect */
-    .panel-input-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .input-wrapper {
-      position: relative;
-      flex: 1;
-      display: flex;
-      align-items: center;
-    }
-    .input-icon {
-      position: absolute;
-      left: 10px;
-      pointer-events: none;
-      color: var(--neon-connected);
-    }
-    .cell-id-input {
-      width: 100%;
-      background: #090d16;
-      border: 1px solid #334155;
-      color: #fff;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-      padding: 7px 10px 7px 32px;
-      border-radius: 10px;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .cell-id-input:focus {
-      border-color: var(--neon-connected);
-      box-shadow: 0 0 0 2px rgba(0, 255, 102, 0.2);
-    }
-    .btn-auto-nearest {
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #f1f5f9;
-      font-weight: 700;
-      font-size: 11px;
-      padding: 7px 10px;
-      border-radius: 10px;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    .btn-auto-nearest:hover { background: #334155; }
-    .btn-auto-nearest:active { transform: scale(0.96); }
+        .coords {
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: #38bdf8;
+        }
 
-    /* Bottom Row: Connection Status & Live Location */
-    .panel-status-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 11px;
-      padding-top: 4px;
-      border-top: 1px solid rgba(51, 65, 85, 0.5);
-    }
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      background: #64748b;
-    }
-    .status-dot.connected {
-      background: var(--neon-connected);
-      box-shadow: 0 0 8px var(--neon-connected);
-      animation: pulse-dot 1.4s infinite;
-    }
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(1.25); }
-    }
-    .status-text {
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .status-text.connected {
-      color: var(--neon-connected);
-      font-weight: 800;
-    }
-    .status-text.muted { color: var(--text-muted); }
-    .status-text.warn { color: #fbbf24; }
-
-    .panel-loc-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    .loc-street-label {
-      color: #fff;
-      font-weight: 600;
-      max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .btn-coords {
-      background: rgba(2, 132, 199, 0.2);
-      border: 1px solid rgba(56, 189, 248, 0.4);
-      color: #38bdf8;
-      font-family: ui-monospace, monospace;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 6px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .btn-coords:active { transform: scale(0.95); }
-
-    /* MARKERS STYLING */
-    /* Neon Green Connected Tower with Pulsing Ripple */
-    .tower-connected-wrap {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 52px;
-      height: 52px;
-    }
-    .neon-pulse-ripple {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: rgba(0, 255, 102, 0.25);
-      border: 2px solid var(--neon-connected);
-      box-shadow: 0 0 16px var(--neon-connected), inset 0 0 12px var(--neon-connected);
-      animation: neon-ripple 1.6s ease-out infinite;
-      pointer-events: none;
-    }
-    @keyframes neon-ripple {
-      0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
-      80% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
-      100% { transform: translate(-50%, -50%) scale(1.7); opacity: 0; }
-    }
-    .neon-tower-icon {
-      position: relative;
-      z-index: 2;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: #020617;
-      border: 2px solid var(--neon-connected);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--neon-connected);
-      box-shadow: 0 0 18px var(--neon-connected);
-    }
-    .neon-connected-pill {
-      position: absolute;
-      bottom: -14px;
-      background: #020617;
-      border: 1px solid var(--neon-connected);
-      color: var(--neon-connected);
-      font-size: 8.5px;
-      font-weight: 900;
-      letter-spacing: 0.04em;
-      padding: 1px 6px;
-      border-radius: 8px;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-      z-index: 3;
-    }
-
-    /* Standard Muted Blue/Grey Nearby Towers */
-    .tower-muted-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      position: relative;
-    }
-    .muted-tower-icon {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #0f172a;
-      border: 1.5px solid var(--muted-tower);
-      color: #94a3b8;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-      transition: transform 0.15s, border-color 0.15s;
-    }
-    .tower-muted-wrap:hover .muted-tower-icon {
-      transform: scale(1.15);
-      border-color: #38bdf8;
-      color: #38bdf8;
-    }
-    .muted-tower-tag {
-      position: absolute;
-      bottom: -11px;
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #94a3b8;
-      font-size: 8px;
-      font-weight: 700;
-      font-family: ui-monospace, monospace;
-      padding: 0 4px;
-      border-radius: 6px;
-      white-space: nowrap;
-    }
-
-    /* Distinct Blue User GPS Marker */
-    .user-marker-wrap {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 180px;
-      height: 70px;
-    }
-    .user-radar-ping {
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: rgba(56, 189, 248, 0.2);
-      border: 1.8px solid var(--user-blue-glow);
-      animation: user-radar 1.8s ease-out infinite;
-      pointer-events: none;
-    }
-    @keyframes user-radar {
-      0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
-      100% { transform: translate(-50%, -50%) scale(1.7); opacity: 0; }
-    }
-    .user-pin-core {
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--user-blue);
-      border: 2.5px solid #fff;
-      box-shadow: 0 0 14px var(--user-blue-glow), 0 2px 6px rgba(0,0,0,0.8);
-      z-index: 5;
-    }
-    .user-callout-pill {
-      position: absolute;
-      top: 28px;
-      background: #020617;
-      border: 1px solid var(--user-blue-glow);
-      color: #38bdf8;
-      font-size: 8.5px;
-      font-weight: 900;
-      padding: 1px 7px;
-      border-radius: 8px;
-      letter-spacing: 0.05em;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-      z-index: 6;
-    }
-    .user-street-banner {
-      position: absolute;
-      top: 44px;
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid #334155;
-      color: #e2e8f0;
-      font-size: 9px;
-      font-weight: 600;
-      padding: 1px 8px;
-      border-radius: 6px;
-      white-space: nowrap;
-      max-width: 170px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
-      z-index: 6;
-    }
-
-    /* Floating Location Bar at Bottom-Left */
-    .on-map-location-bar {
-      position: fixed;
-      bottom: 20px;
-      left: 14px;
-      z-index: 990;
-      background: var(--card-bg);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 8px 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      max-width: calc(100% - 80px);
-      user-select: none;
-    }
-    .bar-icon {
-      color: var(--user-blue-glow);
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-    .bar-info { min-width: 0; }
-    .bar-title {
-      font-size: 9.5px;
-      text-transform: uppercase;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: var(--user-blue-glow);
-    }
-    .bar-street {
-      font-size: 11.5px;
-      font-weight: 700;
-      color: #fff;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .bar-coords {
-      font-size: 9.5px;
-      font-family: ui-monospace, monospace;
-      color: var(--text-muted);
-    }
-
-    /* Floating Recenter FAB in Bottom-Right */
-    .fab-recenter {
-      position: fixed;
-      bottom: 20px;
-      right: 14px;
-      z-index: 990;
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #38bdf8;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .fab-recenter:active { transform: scale(0.92); }
-
-    /* Bottom Sheet */
-    .bottom-sheet {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 1050;
-      background: #0f172a;
-      border-top: 1px solid #334155;
-      border-radius: 20px 20px 0 0;
-      padding: 16px 18px 24px;
-      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.85);
-      transform: translateY(105%);
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .bottom-sheet.open { transform: translateY(0); }
-    .sheet-handle {
-      width: 36px;
-      height: 4px;
-      background: #334155;
-      border-radius: 2px;
-      margin: 0 auto 12px;
-    }
-    .sheet-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .sheet-title { font-size: 16px; font-weight: 800; color: #fff; }
-    .sheet-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
-    .sheet-close {
-      background: #1e293b;
-      border: none;
-      color: #94a3b8;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-    }
-    .sheet-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin: 12px 0 16px;
-    }
-    .grid-card {
-      background: #1e293b;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-    }
-    .grid-label {
-      font-size: 9.5px;
-      color: #94a3b8;
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-    .grid-val {
-      font-size: 13px;
-      font-weight: 700;
-      color: #fff;
-      font-family: ui-monospace, monospace;
-      margin-top: 2px;
-    }
-    .btn-set-connected {
-      width: 100%;
-      background: var(--neon-connected);
-      color: #020617;
-      border: none;
-      font-weight: 800;
-      font-size: 13px;
-      padding: 10px;
-      border-radius: 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      box-shadow: 0 4px 14px rgba(0, 255, 102, 0.35);
-    }
-    .btn-set-connected:active { transform: scale(0.98); }
-
-    /* Modal for API Settings */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
-      z-index: 2000;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal-box {
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      width: 100%;
-      max-width: 420px;
-      padding: 20px;
-    }
-    .modal-box h3 { font-size: 16px; color: #fff; margin-bottom: 12px; }
-    .modal-box input {
-      width: 100%;
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #fff;
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 12px;
-      outline: none;
-    }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
-    .btn-sec {
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #cbd5e1;
-      padding: 7px 14px;
-      border-radius: 8px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    .btn-pri {
-      background: var(--neon-connected);
-      border: none;
-      color: #020617;
-      font-weight: 800;
-      padding: 7px 16px;
-      border-radius: 8px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
-    /* Leaflet overrides */
-    .leaflet-popup-content-wrapper {
-      background: rgba(15, 23, 42, 0.96) !important;
-      color: #f1f5f9 !important;
-      border: 1px solid #334155 !important;
-      border-radius: 12px !important;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8) !important;
-    }
-    .leaflet-popup-tip { background: rgba(15, 23, 42, 0.96) !important; }
-    .leaflet-bar {
-      border: none !important;
-      border-radius: 10px !important;
-      overflow: hidden;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7) !important;
-    }
-    .leaflet-bar a {
-      background-color: #0f172a !important;
-      color: #cbd5e1 !important;
-      border-bottom: 1px solid #334155 !important;
-    }
-  </style>
+        .auto-btn {
+            background: #1e293b;
+            color: #fff;
+            border: 1px solid #475569;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        
+        .auto-btn:active {
+            background: #334155;
+        }
+    </style>
 </head>
 <body>
-  <div id="app">
-    <!-- 1. Map container filling 100% of the screen/viewport underneath -->
+
+    <!-- Map Container -->
     <div id="map"></div>
 
-    <!-- 2. Status Panel floating overlay at the top (top: 10px, left: 10px, right: 10px, z-index: 1000) -->
-    <div class="status-panel-overlay">
-      <!-- Panel card itself has pointer-events: auto so its internal buttons and text remain fully interactive -->
-      <div class="status-panel-card">
-        <!-- Row 1: Wordmark & Quick Actions -->
-        <div class="panel-top-row">
-          <div class="brand">
-            <div class="brand-icon">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
-              </svg>
+    <!-- Fixed Header Overlay Panel -->
+    <div class="panel-overlay-container">
+        <div class="status-panel">
+            <div class="panel-header">
+                <span>📶 Cell Tower Finder</span>
+                <button class="auto-btn" id="locateBtn">My Location</button>
             </div>
-            <span>Cell Tower Finder</span>
-          </div>
-          <div class="top-actions">
-            <button id="btnSwitchLayer" class="btn-action" title="Toggle map style">
-              <span id="layerNameText">Streets</span>
-            </button>
-            <button id="btnApiSettings" class="btn-action" title="Configure OpenCelliD API Key">
-              <span>API Key</span>
-            </button>
-          </div>
+            <div class="connection-status">
+                <span class="status-dot"></span> <span id="connText">CONNECTING TO GPS...</span>
+            </div>
+            <div class="location-info">
+                <span id="locName">📍 Acquiring location...</span>
+                <span class="coords" id="coordText">--.----°, --.----°</span>
+            </div>
         </div>
-
-        <!-- Row 2: Cell ID Input Row -->
-        <div class="panel-input-row">
-          <div class="input-wrapper">
-            <svg class="input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2" fill="#00FF66"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
-            </svg>
-            <input
-              type="text"
-              id="connectedCellInput"
-              class="cell-id-input"
-              placeholder="Enter current Cell ID or eNodeB..."
-              autocomplete="off"
-            />
-          </div>
-          <button id="btnAutoNearest" class="btn-auto-nearest" title="Auto-connect to closest cell site">
-            Auto-Nearest
-          </button>
-        </div>
-
-        <!-- Row 3: Connection Status & Live Location -->
-        <div class="panel-status-row">
-          <div class="status-indicator">
-            <div id="statusDot" class="status-dot"></div>
-            <div id="statusText" class="status-text muted">Type Cell ID above to highlight tower in Neon Green</div>
-          </div>
-          <div class="panel-loc-group">
-            <span style="color:#38bdf8;">📍</span>
-            <span id="headerAddress" class="loc-street-label">Detecting location...</span>
-            <button id="btnHeaderCoords" class="btn-coords" title="Recenter to location">--</button>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- Floating Live Location Bar at Bottom-Left -->
-    <div class="on-map-location-bar">
-      <div class="bar-icon">📍</div>
-      <div class="bar-info">
-        <div class="bar-title">GPS Live Location</div>
-        <div id="barStreetText" class="bar-street">Locating...</div>
-        <div id="barCoordsText" class="bar-coords">--</div>
-      </div>
-    </div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize Map (default fallback center)
+        const map = L.map('map', { zoomControl: false }).setView([17.2326, 78.5899], 15);
 
-    <!-- Floating Recenter Action Button at Bottom-Right -->
-    <button id="fabRecenter" class="fab-recenter" title="Recenter and zoom to my GPS position">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-        <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/>
-        <line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/>
-        <line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
-      </svg>
-    </button>
+        // Add Zoom control to bottom right so it doesn't clash with top panel
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    <!-- Bottom Sheet for Selected Tower -->
-    <div id="towerSheet" class="bottom-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-head">
-        <div>
-          <div id="sheetTitle" class="sheet-title">Cell Tower Site</div>
-          <div id="sheetMeta" class="sheet-sub">LTE Cellular</div>
-        </div>
-        <button id="btnCloseSheet" class="sheet-close">&times;</button>
-      </div>
-      <div class="sheet-grid">
-        <div class="grid-card">
-          <div class="grid-label">Cell ID</div>
-          <div id="valCellId" class="grid-val">--</div>
-        </div>
-        <div class="grid-card">
-          <div class="grid-label">eNodeB / gNB</div>
-          <div id="valEnb" class="grid-val">--</div>
-        </div>
-        <div class="grid-card">
-          <div class="grid-label">Signal (RSRP)</div>
-          <div id="valRsrp" class="grid-val">-- dBm</div>
-        </div>
-        <div class="grid-card">
-          <div class="grid-label">Distance</div>
-          <div id="valDist" class="grid-val">-- m</div>
-        </div>
-        <div class="grid-card">
-          <div class="grid-label">LAC / TAC</div>
-          <div id="valLac" class="grid-val">--</div>
-        </div>
-        <div class="grid-card">
-          <div class="grid-label">MCC / MNC</div>
-          <div id="valMcc" class="grid-val">--</div>
-        </div>
-      </div>
-      <button id="btnSetConnected" class="btn-set-connected">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        <span>Set as Currently Connected Tower</span>
-      </button>
-    </div>
+        // OpenStreetMap Tile Layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-    <!-- API Key Modal -->
-    <div id="apiModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h3>OpenCelliD / Unwired Labs API</h3>
-        <input type="text" id="apiInput" placeholder="Enter API token here..." />
-        <p style="font-size:12px; color:#94a3b8; margin-bottom:14px; line-height:1.4;">
-          If left blank, realistic cell towers with authentic carrier frequencies, eNodeB IDs, and signal levels will be populated automatically around your GPS position.
-        </p>
-        <div class="modal-actions">
-          <button id="btnCancelApi" class="btn-sec">Cancel</button>
-          <button id="btnSaveApi" class="btn-pri">Save Token</button>
-        </div>
-      </div>
-    </div>
-  </div>
+        let marker = null;
+        let accuracyCircle = null;
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+        // Function to update position on map & panel
+        function updatePosition(lat, lng, accuracy) {
+            map.setView([lat, lng], 16);
 
-  <script>
-    // State
-    let map, currentTileLayer;
-    let userMarker, userAccCircle, connectedVectorLine, vectorBadgeMarker;
-    let towerMarkers = [];
-    let allTowers = [];
-    let selectedTower = null;
-    let connectedCellId = '1849201';
-    let userCoords = { lat: 37.7749, lon: -122.4194 };
-    let userAccuracy = 15;
-    let userAddress = 'Detecting location...';
-    let currentLayerKey = 'streets';
-    let apiKey = localStorage.getItem('opencellid_key') || '';
-
-    const TILE_CONFIGS = {
-      streets: { name: 'Streets', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
-      voyager: { name: 'City Clean', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
-      satellite: { name: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
-      dark: { name: 'Dark', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' }
-    };
-
-    function distMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371e3;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-    }
-
-    function formatDistance(m) {
-      if (m < 1000) return `${m} m`;
-      return `${(m / 1000).toFixed(1)} km`;
-    }
-
-    function calcRsrp(dist, radio) {
-      const distKm = Math.max(0.04, dist / 1000);
-      const freq = radio === '5G' ? 3500 : 1900;
-      const pathLoss = 20 * Math.log10(distKm) + 20 * Math.log10(freq) + 38;
-      const tx = radio === '5G' ? 46 : 43;
-      return Math.round(Math.min(-48, Math.max(-128, tx - pathLoss)));
-    }
-
-    function getBearing(lat1, lon1, lat2, lon2) {
-      const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
-      const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
-                Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
-      return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
-    }
-
-    // Initialize Map - fills 100% of viewport underneath
-    function initAppMap() {
-      map = L.map('map', {
-        zoomControl: false,
-        attributionControl: false
-      }).setView([userCoords.lat, userCoords.lon], 16);
-
-      currentTileLayer = L.tileLayer(TILE_CONFIGS.streets.url, { maxZoom: 19 }).addTo(map);
-
-      // Controls positioned safely away from top floating panel
-      L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(map);
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-      // User Marker
-      userMarker = L.marker([userCoords.lat, userCoords.lon], {
-        icon: makeUserIcon(),
-        zIndexOffset: 3000
-      }).addTo(map);
-
-      userAccCircle = L.circle([userCoords.lat, userCoords.lon], {
-        radius: 35,
-        color: '#0284c7',
-        weight: 1.5,
-        dashArray: '3, 4',
-        fillColor: '#38bdf8',
-        fillOpacity: 0.12
-      }).addTo(map);
-
-      // Guarantees map tiles render immediately and never collapse
-      setTimeout(() => map.invalidateSize(), 50);
-      setTimeout(() => map.invalidateSize(), 200);
-      setTimeout(() => map.invalidateSize(), 500);
-      window.addEventListener('resize', () => map.invalidateSize());
-
-      setupGPS();
-      loadNearbyTowers();
-      resolveAddress(userCoords.lat, userCoords.lon);
-    }
-
-    function makeUserIcon() {
-      const html = `
-        <div class="user-marker-wrap">
-          <div class="user-radar-ping"></div>
-          <div class="user-pin-core"></div>
-          <div class="user-callout-pill">📍 YOU ARE HERE</div>
-          <div class="user-street-banner">${userAddress}</div>
-        </div>
-      `;
-      return L.divIcon({
-        className: 'user-marker-leaflet-icon',
-        html: html,
-        iconSize: [180, 70],
-        iconAnchor: [90, 14]
-      });
-    }
-
-    // Geolocation detection
-    function setupGPS() {
-      if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(onLocationFound, onLocationFail, { enableHighAccuracy: true });
-        navigator.geolocation.watchPosition(onLocationFound, onLocationFail, {
-          enableHighAccuracy: true,
-          maximumAge: 3000,
-          timeout: 10000
-        });
-      } else {
-        createMockTowers();
-      }
-    }
-
-    function onLocationFound(pos) {
-      const { latitude, longitude, accuracy } = pos.coords;
-      userCoords = { lat: latitude, lon: longitude };
-      userAccuracy = accuracy || 15;
-
-      userMarker.setLatLng([latitude, longitude]);
-      userAccCircle.setLatLng([latitude, longitude]);
-      userAccCircle.setRadius(Math.max(15, accuracy || 25));
-
-      updateUIElements();
-      updateTowerDistances();
-    }
-
-    function onLocationFail(err) {
-      console.warn('Geolocation fallback:', err.message);
-      updateUIElements();
-      createMockTowers();
-    }
-
-    async function resolveAddress(lat, lon) {
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.address) {
-            const a = data.address;
-            const road = a.road || a.pedestrian || a.suburb || a.neighbourhood || a.city;
-            const city = a.city || a.town || a.county || '';
-            userAddress = road ? (city ? `${road}, ${city}` : road) : data.display_name.split(',').slice(0, 2).join(',');
-            updateUIElements();
-            return;
-          }
-        }
-      } catch (e) {}
-      userAddress = `Near ${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
-      updateUIElements();
-    }
-
-    function updateUIElements() {
-      document.getElementById('headerAddress').textContent = userAddress;
-      document.getElementById('btnHeaderCoords').textContent = `${Math.abs(userCoords.lat).toFixed(4)}°, ${Math.abs(userCoords.lon).toFixed(4)}°`;
-      document.getElementById('barStreetText').textContent = userAddress;
-      document.getElementById('barCoordsText').textContent = `${userCoords.lat.toFixed(5)}°, ${userCoords.lon.toFixed(5)}° (±${Math.round(userAccuracy)}m)`;
-
-      if (userMarker) {
-        userMarker.setIcon(makeUserIcon());
-      }
-    }
-
-    function recenterOnUser() {
-      if (!map) return;
-      map.flyTo([userCoords.lat, userCoords.lon], 16, { animate: true, duration: 0.8 });
-    }
-
-    // Load Towers
-    async function loadNearbyTowers() {
-      if (apiKey) {
-        try {
-          const url = `https://opencellid.org/cell/getInArea?key=${apiKey}&BBOX=${userCoords.lat - 0.04},${userCoords.lon - 0.04},${userCoords.lat + 0.04},${userCoords.lon + 0.04}&format=json`;
-          const res = await fetch(url);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.cells && data.cells.length > 0) {
-              allTowers = data.cells.map((c, i) => {
-                const dist = distMeters(userCoords.lat, userCoords.lon, c.lat, c.lon);
-                const radio = c.radio || (i % 3 === 0 ? '5G' : 'LTE');
-                return {
-                  id: String(c.cellid || (1849200 + i)),
-                  cellid: c.cellid || (1849200 + i),
-                  enodeb: c.unit || (45210 + i),
-                  carrier: ['Verizon', 'T-Mobile', 'AT&T'][i % 3],
-                  radio: radio,
-                  lat: c.lat,
-                  lon: c.lon,
-                  dist: dist,
-                  rsrp: calcRsrp(dist, radio),
-                  lac: c.area || 1042,
-                  mcc: c.mcc || 310,
-                  mnc: c.mnc || 410,
-                  bearing: getBearing(userCoords.lat, userCoords.lon, c.lat, c.lon)
-                };
-              });
-              renderTowerMarkers();
-              return;
+            if (marker) {
+                marker.setLatLng([lat, lng]);
+                accuracyCircle.setLatLng([lat, lng]);
+                accuracyCircle.setRadius(accuracy || 30);
+            } else {
+                marker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup("<b>Current Location</b>").openPopup();
+                accuracyCircle = L.circle([lat, lng], { radius: accuracy || 30, color: '#38bdf8', fillOpacity: 0.15 }).addTo(map);
             }
-          }
-        } catch (e) {
-          console.warn('OpenCelliD error, using simulation:', e);
+
+            // Update panel text
+            document.getElementById('coordText').innerText = `${lat.toFixed(4)}°, ${lng.toFixed(4)}°`;
+            document.getElementById('connText').innerText = `CONNECTED: Active GPS Tracking`;
+            document.getElementById('locName').innerText = `📍 Live Location (Accuracy: ~${Math.round(accuracy || 0)}m)`;
         }
-      }
-      createMockTowers();
-    }
 
-    function createMockTowers() {
-      const templates = [
-        { dLat: 0.0028, dLon: 0.0035, carrier: 'Verizon Wireless', radio: '5G', cellid: 1849201, enodeb: 48291, lac: 1042, mcc: 311, mnc: 480 },
-        { dLat: -0.0032, dLon: 0.0042, carrier: 'T-Mobile Ultra', radio: '5G', cellid: 2948192, enodeb: 61920, lac: 2048, mcc: 310, mnc: 260 },
-        { dLat: 0.0045, dLon: -0.0028, carrier: 'AT&T Mobility', radio: 'LTE', cellid: 1049281, enodeb: 39481, lac: 1042, mcc: 310, mnc: 410 },
-        { dLat: -0.0022, dLon: -0.0051, carrier: 'Verizon Wireless', radio: 'LTE', cellid: 1849202, enodeb: 48291, lac: 1042, mcc: 311, mnc: 480 },
-        { dLat: 0.0061, dLon: 0.0018, carrier: 'T-Mobile', radio: 'LTE', cellid: 2948195, enodeb: 61922, lac: 2048, mcc: 310, mnc: 260 },
-        { dLat: -0.0055, dLon: 0.0022, carrier: 'Dish Wireless', radio: '5G', cellid: 3920182, enodeb: 72019, lac: 3012, mcc: 313, mnc: 340 }
-      ];
-
-      allTowers = templates.map((t) => {
-        const lat = userCoords.lat + t.dLat;
-        const lon = userCoords.lon + t.dLon;
-        const dist = distMeters(userCoords.lat, userCoords.lon, lat, lon);
-        return {
-          id: String(t.cellid),
-          cellid: t.cellid,
-          enodeb: t.enodeb,
-          carrier: t.carrier,
-          radio: t.radio,
-          lat: lat,
-          lon: lon,
-          dist: dist,
-          rsrp: calcRsrp(dist, t.radio),
-          lac: t.lac,
-          mcc: t.mcc,
-          mnc: t.mnc,
-          bearing: getBearing(userCoords.lat, userCoords.lon, lat, lon)
-        };
-      }).sort((a, b) => a.dist - b.dist);
-
-      renderTowerMarkers();
-    }
-
-    function updateTowerDistances() {
-      allTowers.forEach(t => {
-        t.dist = distMeters(userCoords.lat, userCoords.lon, t.lat, t.lon);
-        t.rsrp = calcRsrp(t.dist, t.radio);
-        t.bearing = getBearing(userCoords.lat, userCoords.lon, t.lat, t.lon);
-      });
-      allTowers.sort((a, b) => a.dist - b.dist);
-      renderTowerMarkers();
-    }
-
-    // Render Tower Markers: Neon Green for Connected, Muted Blue/Grey for Nearby
-    function renderTowerMarkers() {
-      towerMarkers.forEach(m => map.removeLayer(m));
-      towerMarkers = [];
-
-      if (connectedVectorLine) {
-        map.removeLayer(connectedVectorLine);
-        connectedVectorLine = null;
-      }
-      if (vectorBadgeMarker) {
-        map.removeLayer(vectorBadgeMarker);
-        vectorBadgeMarker = null;
-      }
-
-      const inputVal = connectedCellId.trim().toLowerCase();
-      let matchedTower = null;
-
-      allTowers.forEach(t => {
-        const isConnected = inputVal && (
-          String(t.cellid).toLowerCase() === inputVal ||
-          String(t.enodeb).toLowerCase() === inputVal ||
-          String(t.id).toLowerCase() === inputVal
-        );
-
-        if (isConnected) matchedTower = t;
-
-        let icon;
-        if (isConnected) {
-          // Live/Connected Tower: Neon Green (#00FF66) with glowing, pulsing CSS ripple
-          const html = `
-            <div class="tower-connected-wrap">
-              <div class="neon-pulse-ripple"></div>
-              <div class="neon-tower-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2" fill="#00FF66"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
-                </svg>
-              </div>
-              <div class="neon-connected-pill">CURRENTLY CONNECTED</div>
-            </div>
-          `;
-          icon = L.divIcon({
-            className: 'marker-connected-icon',
-            html: html,
-            iconSize: [52, 52],
-            iconAnchor: [26, 26]
-          });
+        // Request user browser geolocation on load for travel tracking
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    updatePosition(lat, lng, accuracy);
+                },
+                (error) => {
+                    console.warn("Geolocation error or permission denied:", error.message);
+                    document.getElementById('connText').innerText = `GPS ERROR - Using Default Zone`;
+                    document.getElementById('locName').innerText = `📍 Default View`;
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 10000,
+                    timeout: 15000
+                }
+            );
         } else {
-          // Surrounding Towers: Standard muted blue/grey pins
-          const html = `
-            <div class="tower-muted-wrap">
-              <div class="muted-tower-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><circle cx="12" cy="12" r="2"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
-                </svg>
-              </div>
-              <div class="muted-tower-tag">${formatDistance(t.dist)}</div>
-            </div>
-          `;
-          icon = L.divIcon({
-            className: 'marker-muted-icon',
-            html: html,
-            iconSize: [34, 34],
-            iconAnchor: [17, 17]
-          });
+            alert("Geolocation is not supported by your browser.");
         }
 
-        const marker = L.marker([t.lat, t.lon], {
-          icon: icon,
-          zIndexOffset: isConnected ? 2000 : 1000
-        }).addTo(map);
-
-        const popupContent = `
-          <div style="font-family: inherit; min-width: 170px;">
-            <div style="font-weight: 800; font-size: 13px; color: ${isConnected ? '#00FF66' : '#fff'};">
-              ${isConnected ? '⚡ CURRENTLY CONNECTED' : t.carrier}
-            </div>
-            <div style="font-size: 11px; color: #94a3b8; margin: 2px 0 6px;">
-              ${t.carrier} · ${t.radio} Cellular
-            </div>
-            <div style="font-size: 11px; line-height: 1.5; font-family: monospace;">
-              <div><strong>Cell ID:</strong> ${t.cellid}</div>
-              <div><strong>eNodeB:</strong> ${t.enodeb}</div>
-              <div><strong>Signal:</strong> ${t.rsrp} dBm</div>
-              <div><strong>Distance:</strong> ${formatDistance(t.dist)} (${t.bearing}°)</div>
-            </div>
-          </div>
-        `;
-        marker.bindPopup(popupContent);
-
-        marker.on('click', () => {
-          openTowerSheet(t);
+        // Button to manually re-center on current position
+        document.getElementById('locateBtn').addEventListener('click', () => {
+            navigator.geolocation.getCurrentPosition((position) => {
+                updatePosition(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+            });
         });
-
-        towerMarkers.push(marker);
-      });
-
-      // Update status text in floating header
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-
-      if (matchedTower) {
-        dot.className = 'status-dot connected';
-        text.className = 'status-text connected';
-        text.textContent = `CONNECTED: ${matchedTower.carrier} (ID: ${matchedTower.cellid})`;
-
-        // Draw Neon Green connection beam line to user
-        connectedVectorLine = L.polyline(
-          [[userCoords.lat, userCoords.lon], [matchedTower.lat, matchedTower.lon]],
-          {
-            color: '#00FF66',
-            weight: 3.5,
-            dashArray: '6, 6',
-            opacity: 0.95
-          }
-        ).addTo(map);
-
-        // Distance & Bearing badge at line midpoint
-        const midLat = (userCoords.lat + matchedTower.lat) / 2;
-        const midLon = (userCoords.lon + matchedTower.lon) / 2;
-        const midHtml = `
-          <div style="background: rgba(2,6,23,0.95); border: 1px solid #00FF66; color: #00FF66; font-family: monospace; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,255,102,0.4); white-space: nowrap;">
-            ⚡ ${formatDistance(matchedTower.dist)} · ${matchedTower.bearing}°
-          </div>
-        `;
-        vectorBadgeMarker = L.marker([midLat, midLon], {
-          icon: L.divIcon({ html: midHtml, iconSize: [120, 20], iconAnchor: [60, 10] }),
-          interactive: false
-        }).addTo(map);
-
-      } else if (inputVal.length > 0) {
-        dot.className = 'status-dot';
-        text.className = 'status-text warn';
-        text.textContent = `No tower matches ID "${inputVal}"`;
-      } else {
-        dot.className = 'status-dot';
-        text.className = 'status-text muted';
-        text.textContent = 'Type Cell ID above to highlight tower in Neon Green';
-      }
-    }
-
-    function openTowerSheet(t) {
-      selectedTower = t;
-      document.getElementById('sheetTitle').textContent = t.carrier;
-      document.getElementById('sheetMeta').textContent = `${t.radio} Cellular · ${formatDistance(t.dist)} away`;
-      document.getElementById('valCellId').textContent = t.cellid;
-      document.getElementById('valEnb').textContent = t.enodeb;
-      document.getElementById('valRsrp').textContent = `${t.rsrp} dBm`;
-      document.getElementById('valDist').textContent = formatDistance(t.dist);
-      document.getElementById('valLac').textContent = t.lac;
-      document.getElementById('valMcc').textContent = `${t.mcc} / ${t.mnc}`;
-
-      document.getElementById('towerSheet').classList.add('open');
-    }
-
-    // Event Listeners
-    document.addEventListener('DOMContentLoaded', () => {
-      initAppMap();
-
-      // Cell ID input typing
-      const input = document.getElementById('connectedCellInput');
-      input.value = connectedCellId;
-      input.addEventListener('input', (e) => {
-        connectedCellId = e.target.value;
-        renderTowerMarkers();
-      });
-
-      // Auto-Nearest button
-      document.getElementById('btnAutoNearest').addEventListener('click', () => {
-        if (allTowers.length > 0) {
-          connectedCellId = String(allTowers[0].cellid);
-          input.value = connectedCellId;
-          renderTowerMarkers();
-        }
-      });
-
-      // Recenter buttons
-      document.getElementById('fabRecenter').addEventListener('click', recenterOnUser);
-      document.getElementById('btnHeaderCoords').addEventListener('click', recenterOnUser);
-
-      // Layer switcher button
-      const layerKeys = ['streets', 'voyager', 'satellite', 'dark'];
-      document.getElementById('btnSwitchLayer').addEventListener('click', () => {
-        const nextIdx = (layerKeys.indexOf(currentLayerKey) + 1) % layerKeys.length;
-        currentLayerKey = layerKeys[nextIdx];
-        const cfg = TILE_CONFIGS[currentLayerKey];
-        if (currentTileLayer) map.removeLayer(currentTileLayer);
-        currentTileLayer = L.tileLayer(cfg.url, { maxZoom: 19 }).addTo(map);
-        document.getElementById('layerNameText').textContent = cfg.name;
-      });
-
-      // Sheet Close & Set as Connected
-      document.getElementById('btnCloseSheet').addEventListener('click', () => {
-        document.getElementById('towerSheet').classList.remove('open');
-      });
-
-      document.getElementById('btnSetConnected').addEventListener('click', () => {
-        if (selectedTower) {
-          connectedCellId = String(selectedTower.cellid);
-          input.value = connectedCellId;
-          renderTowerMarkers();
-          document.getElementById('towerSheet').classList.remove('open');
-        }
-      });
-
-      // API Settings Modal
-      const modal = document.getElementById('apiModal');
-      document.getElementById('btnApiSettings').addEventListener('click', () => {
-        document.getElementById('apiInput').value = apiKey;
-        modal.classList.add('open');
-      });
-      document.getElementById('btnCancelApi').addEventListener('click', () => {
-        modal.classList.remove('open');
-      });
-      document.getElementById('btnSaveApi').addEventListener('click', () => {
-        apiKey = document.getElementById('apiInput').value.trim();
-        localStorage.setItem('opencellid_key', apiKey);
-        modal.classList.remove('open');
-        loadNearbyTowers();
-      });
-    });
-  </script>
+    </script>
 </body>
 </html>
