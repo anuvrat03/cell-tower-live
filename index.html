@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Mobile Cell Tower Finder</title>
-  <meta name="theme-color" content="#090d16">
+  <meta name="theme-color" content="#0a0e17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <!-- Leaflet CSS & JS CDN -->
+  
+  <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
   <style>
     * {
       box-sizing: border-box;
@@ -27,6 +29,7 @@
       --muted-tower: #64748b;
       --user-blue: #0284c7;
       --user-blue-glow: #38bdf8;
+      --header-height: 114px;
     }
     body, html {
       width: 100%;
@@ -37,29 +40,44 @@
       color: var(--text);
     }
     #app {
-      display: flex;
-      flex-direction: column;
+      width: 100%;
       height: 100%;
       position: relative;
+      overflow: hidden;
     }
-    /* Top Bar */
-    header {
-      background: rgba(10, 14, 23, 0.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--surface-border);
+
+    /* Permanently Fixed Top Header - anchors at top: 0; left: 0; width: 100%; z-index: 1000; completely outside the map */
+    .fixed-top-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 1000;
+      background: rgba(10, 14, 23, 0.98);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(51, 65, 85, 0.85);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Header Row 1: Brand Wordmark & Top Actions */
+    .header-top-row {
       padding: 8px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      z-index: 1000;
-      min-height: 50px;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.65);
+      min-height: 46px;
     }
     .brand {
       display: flex;
       align-items: center;
       gap: 8px;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.95rem;
       color: #fff;
     }
     .brand svg {
@@ -74,33 +92,25 @@
       background: #1e293b;
       border: 1px solid #334155;
       color: #f1f5f9;
-      height: 36px;
+      height: 32px;
       padding: 0 10px;
       border-radius: 8px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       cursor: pointer;
+      transition: background 0.15s;
     }
     .btn-header:active {
       transform: scale(0.96);
     }
 
-    /* Live Cell ID Search Bar Pinned Over Top of Map */
-    .cell-id-bar {
-      position: absolute;
-      top: 58px;
-      left: 10px;
-      right: 10px;
-      z-index: 999;
-      background: rgba(15, 23, 42, 0.94);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(51, 65, 85, 0.8);
-      border-radius: 14px;
-      padding: 8px 10px;
-      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.6);
+    /* Header Row 2: Dark Status & Address Bar (ID, connection status, and location) */
+    .header-status-panel {
+      padding: 7px 12px 8px;
+      background: rgba(15, 23, 42, 0.96);
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -110,17 +120,28 @@
       align-items: center;
       gap: 8px;
     }
-    .cell-input {
+    .input-wrap {
+      position: relative;
       flex: 1;
+      display: flex;
+      align-items: center;
+    }
+    .input-icon {
+      position: absolute;
+      left: 10px;
+      pointer-events: none;
+    }
+    .cell-input {
+      width: 100%;
       background: #090d16;
       border: 1px solid #334155;
       color: #fff;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
-      padding: 8px 12px;
+      font-size: 12px;
+      padding: 6px 10px 6px 30px;
       border-radius: 8px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .cell-input:focus {
       border-color: var(--neon-connected);
@@ -132,48 +153,166 @@
       color: #94a3b8;
       font-size: 11px;
       font-weight: 600;
-      padding: 8px 10px;
+      padding: 6px 10px;
       border-radius: 8px;
       cursor: pointer;
       white-space: nowrap;
     }
-    .btn-quick:hover, .btn-quick:active {
+    .btn-quick:active {
       color: #fff;
       border-color: #64748b;
     }
-    .cell-status-strip {
+    .status-and-location-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
+      padding-top: 5px;
+      border-top: 1px solid rgba(51, 65, 85, 0.65);
       font-size: 11px;
-      padding: 0 2px;
     }
     .status-badge {
       display: flex;
       align-items: center;
       gap: 6px;
       font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+      flex: 1;
     }
     .dot-pulse {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: var(--neon-connected);
-      box-shadow: 0 0 10px var(--neon-connected);
+      box-shadow: 0 0 8px var(--neon-connected);
       display: inline-block;
+      flex-shrink: 0;
       animation: neon-blink 1.5s infinite ease-in-out;
     }
     @keyframes neon-blink {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.85); }
     }
+    .header-location-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .header-loc-text {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #fff;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+    .header-coords-btn {
+      background: rgba(2, 132, 199, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .header-coords-btn:active {
+      background: rgba(2, 132, 199, 0.4);
+    }
 
-    /* Map Viewport */
+    /* Map Viewport - completely outside of the fixed top header so map interaction never shifts the header */
     #map {
-      flex: 1;
+      position: absolute;
+      top: var(--header-height);
+      bottom: 0;
+      left: 0;
+      right: 0;
       width: 100%;
       background: #090d16;
       z-index: 1;
+    }
+
+    /* Distinct Blue User GPS Marker with "YOU ARE HERE" & Clear Street Tag */
+    .user-marker-blue {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+    .user-beacon-ping {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.4);
+      animation: user-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+    @keyframes user-ping {
+      0% { transform: scale(0.4); opacity: 0.9; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .user-marker-core {
+      width: 24px;
+      height: 24px;
+      background: #0284c7;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 18px #38bdf8, 0 4px 10px rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 20;
+    }
+    .user-marker-dot {
+      width: 7px;
+      height: 7px;
+      background: #090d16;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.7);
+    }
+    .user-tag {
+      margin-top: 3px;
+      background: #0284c7;
+      color: #fff;
+      font-weight: 900;
+      font-size: 9px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      letter-spacing: 0.05em;
+      box-shadow: 0 2px 10px rgba(2, 132, 199, 0.9);
+      white-space: nowrap;
+      border: 1px solid rgba(255,255,255,0.9);
+      z-index: 25;
+    }
+    .user-street-tag {
+      margin-top: 2px;
+      background: rgba(10, 14, 23, 0.95);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.8);
+      font-weight: 700;
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 5px;
+      white-space: nowrap;
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      z-index: 25;
     }
 
     /* Connected Neon Green Marker with Glowing Ripple Animation */
@@ -183,30 +322,31 @@
       align-items: center;
       justify-content: center;
       position: relative;
+      cursor: pointer;
     }
     .connected-core {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       background: #090d16;
       border: 3px solid #00FF66;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 16px #00FF66, 0 0 32px rgba(0, 255, 102, 0.5);
-      z-index: 10;
+      box-shadow: 0 0 24px #00FF66, 0 0 40px rgba(0, 255, 102, 0.6);
+      z-index: 20;
       position: relative;
     }
     .connected-core svg {
       color: #00FF66;
-      filter: drop-shadow(0 0 4px #00FF66);
+      filter: drop-shadow(0 0 5px #00FF66);
     }
     .ripple-ring {
       position: absolute;
-      top: -12px;
-      left: -12px;
-      width: 56px;
-      height: 56px;
+      top: -14px;
+      left: -14px;
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       border: 2px solid #00FF66;
       pointer-events: none;
@@ -214,10 +354,10 @@
     }
     .ripple-ring-2 {
       position: absolute;
-      top: -24px;
-      left: -24px;
-      width: 80px;
-      height: 80px;
+      top: -26px;
+      left: -26px;
+      width: 88px;
+      height: 88px;
       border-radius: 50%;
       border: 1.5px solid #00FF66;
       pointer-events: none;
@@ -225,34 +365,40 @@
       animation-delay: 0.75s;
     }
     @keyframes ripple-grow {
-      0% {
-        transform: scale(0.3);
-        opacity: 0.95;
-      }
-      70% {
-        opacity: 0.35;
-      }
-      100% {
-        transform: scale(1.6);
-        opacity: 0;
-      }
+      0% { transform: scale(0.3); opacity: 0.95; }
+      70% { opacity: 0.35; }
+      100% { transform: scale(1.6); opacity: 0; }
     }
     .connected-tag {
       margin-top: 4px;
       background: #00FF66;
       color: #000;
-      font-weight: 800;
+      font-weight: 900;
       font-size: 9px;
-      padding: 2px 6px;
+      padding: 2px 8px;
       border-radius: 4px;
       white-space: nowrap;
       letter-spacing: 0.05em;
-      box-shadow: 0 2px 8px rgba(0,255,102,0.6);
+      box-shadow: 0 2px 12px rgba(0,255,102,0.9);
       text-transform: uppercase;
-      z-index: 15;
+      z-index: 25;
+      border: 1px solid #fff;
+    }
+    .connected-subtag {
+      margin-top: 2px;
+      background: rgba(9, 13, 22, 0.94);
+      color: #00FF66;
+      border: 1px solid rgba(0,255,102,0.7);
+      font-size: 9px;
+      font-family: ui-monospace, monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 25;
+      font-weight: 700;
     }
 
-    /* Surrounding Muted Blue/Grey Tower Marker */
+    /* Surrounding Muted Blue/Grey Tower Marker with Proximity Tag */
     .muted-marker {
       display: flex;
       flex-direction: column;
@@ -262,41 +408,128 @@
       transition: transform 0.18s;
     }
     .muted-marker:hover, .muted-marker:active {
-      transform: scale(1.15);
+      transform: scale(1.2);
       z-index: 999 !important;
     }
     .muted-core {
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       background: #1e293b;
       border: 2px solid #64748b;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.6);
     }
     .muted-core svg {
       color: #94a3b8;
     }
+    .muted-dist-tag {
+      margin-top: 2px;
+      background: rgba(9, 13, 22, 0.9);
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      font-size: 9px;
+      font-family: ui-monospace, monospace;
+      padding: 1px 4px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
 
-    /* Distinct Blue User GPS Marker */
-    .user-marker-blue {
+    /* Midpoint Distance Ribbon on Connection Line */
+    .midpoint-badge {
+      background: rgba(9, 13, 22, 0.96);
+      color: #00FF66;
+      border: 1.5px solid #00FF66;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: ui-monospace, monospace;
+      padding: 2px 8px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.8);
+      white-space: nowrap;
+    }
+
+    /* On-Map Floating Location Banner */
+    .on-map-location-card {
+      position: absolute;
+      bottom: 24px;
+      left: 12px;
+      right: 74px;
+      max-width: 360px;
+      background: rgba(10, 14, 23, 0.95);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(51, 65, 85, 0.9);
+      border-radius: 14px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      z-index: 998;
+      box-shadow: 0 10px 28px -5px rgba(0, 0, 0, 0.75);
+    }
+    .card-loc-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(2, 132, 199, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
+      color: #38bdf8;
+      font-size: 14px;
+      flex-shrink: 0;
     }
-    .user-marker-core {
-      width: 18px;
-      height: 18px;
-      background: var(--user-blue);
-      border: 3px solid #ffffff;
-      border-radius: 50%;
-      box-shadow: 0 0 14px var(--user-blue-glow), 0 2px 6px rgba(0,0,0,0.5);
+    .card-loc-details {
+      min-width: 0;
+      flex: 1;
+    }
+    .card-loc-label {
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-loc-address {
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    .card-loc-sub {
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+      color: #94a3b8;
+    }
+    .btn-zoom-loc {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .btn-zoom-loc:active {
+      transform: scale(0.95);
     }
 
-    /* Floating Action Controls */
+    /* Floating Recenter Action Button */
     .fab-column {
       position: absolute;
       bottom: 24px;
@@ -307,20 +540,27 @@
       z-index: 999;
     }
     .fab {
-      width: 46px;
-      height: 46px;
-      border-radius: 12px;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
       background: #0f172a;
       border: 1px solid #334155;
-      color: #fff;
+      color: #38bdf8;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
       cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
     }
     .fab:active {
-      transform: scale(0.95);
+      transform: scale(0.92);
+    }
+    .fab.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(2, 132, 199, 0.8);
     }
 
     /* Bottom Tower Details Drawer */
@@ -398,27 +638,24 @@
       font-size: 13px;
       font-weight: 600;
       color: #f1f5f9;
+      font-family: ui-monospace, monospace;
       margin-top: 2px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     .btn-connect-this {
       width: 100%;
-      margin-top: 12px;
-      background: #00FF66;
+      margin-top: 14px;
+      background: var(--neon-connected);
       color: #000;
-      font-weight: 700;
-      border: none;
+      font-weight: 800;
+      font-size: 13px;
       padding: 10px;
       border-radius: 10px;
-      font-size: 13px;
+      border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-    }
-    .btn-connect-this:active {
-      transform: scale(0.98);
     }
 
     /* Modal for API settings */
@@ -491,7 +728,7 @@
       cursor: pointer;
     }
 
-    /* Leaflet Dark UI */
+    /* Leaflet overrides */
     .leaflet-popup-content-wrapper {
       background: rgba(15, 23, 42, 0.96) !important;
       color: #f1f5f9 !important;
@@ -515,51 +752,89 @@
 </head>
 <body>
   <div id="app">
-    <!-- Top Header -->
-    <header>
-      <div class="brand">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
-        </svg>
-        <span>Cell Tower Finder</span>
+    <!-- Permanently Fixed Top Header - completely outside map scaling container -->
+    <header class="fixed-top-header" style="position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;">
+      <!-- Row 1: Brand & Top Actions -->
+      <div class="header-top-row">
+        <div class="brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
+          </svg>
+          <span>Cell Tower Finder</span>
+        </div>
+        <div class="header-actions">
+          <button id="btnToggleLayer" class="btn-header" title="Toggle Streets / Satellite">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            <span id="layerNameText">Streets</span>
+          </button>
+          <button id="btnSettings" class="btn-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Key</span>
+          </button>
+        </div>
       </div>
-      <div class="header-actions">
-        <button id="btnSettings" class="btn-header">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>API Key</span>
-        </button>
+
+      <!-- Row 2: Dark Status & Address Bar (ID, connection status, and location) -->
+      <div class="header-status-panel">
+        <div class="cell-input-row">
+          <div class="input-wrap">
+            <svg class="input-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00FF66" stroke-width="2.5"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2" fill="#00FF66"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/></svg>
+            <input
+              type="text"
+              id="connectedCellInput"
+              class="cell-input"
+              placeholder="Enter current Cell ID or eNodeB..."
+              autocomplete="off"
+            />
+          </div>
+          <button id="btnAutoConnect" class="btn-quick" title="Set nearest cell as connected">
+            Auto-Nearest
+          </button>
+        </div>
+
+        <div class="status-and-location-row">
+          <!-- Connection Match Status -->
+          <div id="connectionStatus" class="status-badge" style="color: #94a3b8;">
+            <span>Type Cell ID above or tap a tower</span>
+          </div>
+
+          <!-- Live Street Location & Coordinates -->
+          <div class="header-location-group">
+            <div class="header-loc-text">
+              <span style="color:#38bdf8;">📍</span>
+              <span id="headerLocAddress">Detecting location...</span>
+            </div>
+            <button id="btnHeaderRecenter" class="header-coords-btn" title="Click to recenter & zoom in">
+              <span id="headerLocCoords">--</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <!-- Live/Connected Cell ID Input Bar on Top of Map -->
-    <div class="cell-id-bar">
-      <div class="cell-input-row">
-        <input
-          type="text"
-          id="connectedCellInput"
-          class="cell-input"
-          placeholder="Enter your current Cell ID (or eNodeB)..."
-          autocomplete="off"
-        />
-        <button id="btnAutoConnect" class="btn-quick" title="Set nearest cell as connected">
-          Auto-Nearest
-        </button>
-      </div>
-      <div class="cell-status-strip">
-        <div id="connectionStatus" class="status-badge" style="color: #94a3b8;">
-          <span>Type Cell ID above or tap a tower</span>
-        </div>
-        <span id="towerCountLabel" style="color: #64748b; font-size:11px;">0 sites nearby</span>
-      </div>
-    </div>
-
-    <!-- Map Viewport -->
+    <!-- Map Viewport - positioned completely outside and below the fixed header -->
     <div id="map"></div>
 
-    <!-- Right Floating Controls -->
+    <!-- On-Map Location Banner - Prominent Live Location on the Map -->
+    <div class="on-map-location-card">
+      <div class="card-loc-icon">📍</div>
+      <div class="card-loc-details">
+        <div class="card-loc-label">
+          <span>My Live Location</span>
+          <span id="onMapAccuracy">±15m</span>
+        </div>
+        <div id="onMapAddress" class="card-loc-address">Detecting location...</div>
+        <div id="onMapCoords" class="card-loc-sub">--</div>
+      </div>
+      <button id="btnCardZoom" class="btn-zoom-loc" title="Zoom in to my position">
+        <span>Recenter</span>
+      </button>
+    </div>
+
+    <!-- Floating Recenter Action Button -->
     <div class="fab-column">
-      <button id="btnRecenter" class="fab" title="Recenter on My GPS Location">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
+      <button id="btnRecenter" class="fab active" title="Recenter and Zoom to My GPS Location">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
       </button>
     </div>
 
@@ -624,16 +899,42 @@
 
   <script>
     // App State
-    let map;
-    let userMarker, userAccCircle, connectedLine;
+    let map, currentTileLayer, labelLayer;
+    let userMarker, userAccCircle, connectedLine, midpointMarker;
     let towerMarkers = [];
     let allTowers = [];
     let activeTower = null;
-    let connectedCellId = '';
+    let connectedCellId = '1849201';
+    let currentMapStyle = 'streets';
     let userCoords = { lat: 37.7749, lon: -122.4194 };
+    let userAccuracy = 15;
+    let userAddress = 'Detecting location...';
     let apiKey = localStorage.getItem('opencellid_key') || '';
 
-    // Haversine formula (meters)
+    // High clarity map layers
+    const MAP_LAYERS = {
+      streets: {
+        name: 'Streets',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        sub: 'abc'
+      },
+      voyager: {
+        name: 'City Clean',
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        sub: 'abcd'
+      },
+      satellite: {
+        name: 'Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        sub: ''
+      },
+      dark: {
+        name: 'Dark',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        sub: 'abcd'
+      }
+    };
+
     function getDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -644,6 +945,11 @@
       return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
     }
 
+    function formatDist(meters) {
+      if (meters < 1000) return meters + ' m';
+      return (meters / 1000).toFixed(1) + ' km';
+    }
+
     function calcRsrp(distMeters, radio) {
       const distKm = Math.max(0.05, distMeters / 1000);
       const freq = radio === '5G' ? 3500 : 1900;
@@ -652,44 +958,101 @@
       return Math.round(Math.min(-48, Math.max(-128, tx - pathLoss)));
     }
 
-    // Initialize Map
+    // Reverse geocode to resolve street name & update on-map badges
+    async function updateLocationName(lat, lon) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.address) {
+            const a = data.address;
+            const road = a.road || a.pedestrian || a.suburb || a.city || a.town;
+            const city = a.city || a.town || a.county || '';
+            const text = road ? (city ? road + ', ' + city : road) : data.display_name.split(',').slice(0, 2).join(',');
+            userAddress = text;
+            applyLocationToUI();
+            return;
+          }
+        }
+      } catch (e) {}
+      userAddress = `Near ${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+      applyLocationToUI();
+    }
+
+    function applyLocationToUI() {
+      // Update fixed top header address & coordinates
+      const hdrAddr = document.getElementById('headerLocAddress');
+      if (hdrAddr) hdrAddr.textContent = userAddress;
+
+      const hdrCoords = document.getElementById('headerLocCoords');
+      if (hdrCoords) hdrCoords.textContent = `${userCoords.lat.toFixed(4)}°, ${userCoords.lon.toFixed(4)}°`;
+
+      // Update on-map card
+      const addrEl = document.getElementById('onMapAddress');
+      if (addrEl) addrEl.textContent = userAddress;
+
+      const coordsEl = document.getElementById('onMapCoords');
+      if (coordsEl) coordsEl.textContent = `${userCoords.lat.toFixed(5)}°, ${userCoords.lon.toFixed(5)}°`;
+
+      const accEl = document.getElementById('onMapAccuracy');
+      if (accEl) accEl.textContent = `±${Math.round(userAccuracy)}m`;
+
+      // Update user marker label directly on the map
+      if (userMarker) {
+        userMarker.setIcon(createUserIcon());
+      }
+    }
+
+    function createUserIcon() {
+      const userHtml = `
+        <div class="user-marker-blue">
+          <div class="user-beacon-ping"></div>
+          <div class="user-marker-core">
+            <div class="user-marker-dot"></div>
+          </div>
+          <div class="user-tag">📍 YOU ARE HERE</div>
+          <div class="user-street-tag">${userAddress}</div>
+        </div>
+      `;
+      return L.divIcon({
+        className: 'custom-user-beacon-icon',
+        html: userHtml,
+        iconSize: [200, 72],
+        iconAnchor: [100, 12]
+      });
+    }
+
+    // Initialize Map with High Legibility Streets Layer & Scale Bar
     function initMap() {
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
-      }).setView([userCoords.lat, userCoords.lon], 15);
+      }).setView([userCoords.lat, userCoords.lon], 16);
 
+      // Add high-legibility OpenStreetMap as default
+      currentTileLayer = L.tileLayer(MAP_LAYERS.streets.url, { maxZoom: 19 }).addTo(map);
+
+      // Scale bar in bottom left so location distance is clear
+      L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // CartoDB Voyager tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19
-      }).addTo(map);
-
-      // Distinct Blue User Location Marker
-      const userIcon = L.divIcon({
-        className: 'user-marker-blue',
-        html: '<div class="user-marker-core"></div>',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
-      });
-
       userMarker = L.marker([userCoords.lat, userCoords.lon], {
-        icon: userIcon,
-        zIndexOffset: 1000
+        icon: createUserIcon(),
+        zIndexOffset: 2500
       }).addTo(map);
 
       userAccCircle = L.circle([userCoords.lat, userCoords.lon], {
         radius: 35,
         color: '#0284c7',
-        weight: 1.5,
+        weight: 1.8,
+        dashArray: '3, 4',
         fillColor: '#38bdf8',
-        fillOpacity: 0.12
+        fillOpacity: 0.14
       }).addTo(map);
 
-      // Start Geolocation
       setupGeolocation();
       loadTowers();
+      updateLocationName(userCoords.lat, userCoords.lon);
     }
 
     function setupGeolocation() {
@@ -697,7 +1060,7 @@
         navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, { enableHighAccuracy: true });
         navigator.geolocation.watchPosition(onPosSuccess, onPosError, {
           enableHighAccuracy: true,
-          maximumAge: 3000,
+          maximumAge: 2500,
           timeout: 10000
         });
       } else {
@@ -708,62 +1071,102 @@
     function onPosSuccess(pos) {
       const { latitude, longitude, accuracy } = pos.coords;
       userCoords = { lat: latitude, lon: longitude };
+      userAccuracy = accuracy || 15;
 
       userMarker.setLatLng([latitude, longitude]);
       userAccCircle.setLatLng([latitude, longitude]);
       userAccCircle.setRadius(Math.max(15, accuracy || 25));
 
+      applyLocationToUI();
       updateTowerDistances();
     }
 
     function onPosError(err) {
       console.warn('GPS location notice:', err.message);
+      applyLocationToUI();
       loadMockTowers();
     }
 
-    // Generate Custom Tower Icons based on whether this tower is CONNECTED or NEARBY
+    function zoomToUserLocation() {
+      if (!map) return;
+      map.flyTo([userCoords.lat, userCoords.lon], 16, {
+        animate: true,
+        duration: 0.8
+      });
+      const fab = document.getElementById('btnRecenter');
+      if (fab) fab.classList.add('active');
+    }
+
+    // Toggle base tile layer
+    function switchMapLayer() {
+      const modes = ['streets', 'voyager', 'satellite', 'dark'];
+      const nextIdx = (modes.indexOf(currentMapStyle) + 1) % modes.length;
+      currentMapStyle = modes[nextIdx];
+
+      map.removeLayer(currentTileLayer);
+      if (labelLayer) {
+        map.removeLayer(labelLayer);
+        labelLayer = null;
+      }
+
+      const cfg = MAP_LAYERS[currentMapStyle];
+      currentTileLayer = L.tileLayer(cfg.url, { maxZoom: 19 }).addTo(map);
+
+      if (currentMapStyle === 'satellite') {
+        labelLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          zIndex: 500
+        }).addTo(map);
+      }
+
+      document.getElementById('layerNameText').textContent = cfg.name;
+    }
+
+    // Custom Tower Marker: Connected (Neon Green) vs Nearby (Muted Blue/Grey with Distance)
     function createTowerIcon(tower, isConnected) {
+      const distStr = formatDist(tower.distanceMeters);
+
       if (isConnected) {
-        // Neon Green (#00FF66) with glowing, pulsing CSS ripple animation & CURRENTLY CONNECTED label
         const html = `
           <div class="connected-marker">
             <div class="ripple-ring"></div>
             <div class="ripple-ring-2"></div>
             <div class="connected-core">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00FF66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00FF66" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2" fill="#00FF66"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
               </svg>
             </div>
             <div class="connected-tag">CURRENTLY CONNECTED</div>
+            <div class="connected-subtag">${distStr} away · ${tower.carrier.split(' ')[0]}</div>
           </div>
         `;
         return L.divIcon({
           className: 'connected-tower-icon',
           html: html,
-          iconSize: [120, 60],
-          iconAnchor: [60, 20]
+          iconSize: [160, 80],
+          iconAnchor: [80, 20]
         });
       } else {
-        // Standard muted blue/grey pin for surrounding towers
         const html = `
           <div class="muted-marker">
             <div class="muted-core">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2" fill="#94a3b8"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19.1"/>
               </svg>
             </div>
+            <div class="muted-dist-tag">${distStr}</div>
           </div>
         `;
         return L.divIcon({
           className: 'muted-tower-icon',
           html: html,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
+          iconSize: [60, 48],
+          iconAnchor: [30, 14]
         });
       }
     }
 
-    // Render Markers on Leaflet Map
+    // Render Tower Pins and Midpoint Distance Ribbon on Leaflet Map
     function renderTowerMarkers() {
       towerMarkers.forEach(m => map.removeLayer(m));
       towerMarkers = [];
@@ -771,224 +1174,296 @@
         map.removeLayer(connectedLine);
         connectedLine = null;
       }
+      if (midpointMarker) {
+        map.removeLayer(midpointMarker);
+        midpointMarker = null;
+      }
 
+      const inputVal = connectedCellId.trim().toLowerCase();
       let connectedTower = null;
-      const cleanInput = connectedCellId.trim().toLowerCase();
 
-      if (cleanInput.length > 0) {
-        connectedTower = allTowers.find(t =>
-          String(t.cellid).toLowerCase() === cleanInput ||
-          String(t.enodeb).toLowerCase() === cleanInput ||
-          String(t.id).toLowerCase() === cleanInput
+      if (inputVal.length > 0) {
+        connectedTower = allTowers.find(t => 
+          String(t.cellid).toLowerCase() === inputVal ||
+          String(t.enodeb).toLowerCase() === inputVal ||
+          String(t.id).toLowerCase() === inputVal
         );
       }
 
-      allTowers.forEach(t => {
-        const isConnected = connectedTower && (t.id === connectedTower.id);
-        const icon = createTowerIcon(t, isConnected);
-        const marker = L.marker([t.lat, t.lon], {
-          icon: icon,
-          zIndexOffset: isConnected ? 1200 : 100
-        });
-
-        // Popup details
-        if (isConnected) {
-          marker.bindPopup(`
-            <div style="text-align:center; padding: 2px;">
-              <span style="background:#00FF66; color:#000; font-weight:800; font-size:10px; padding:2px 8px; border-radius:4px; display:inline-block; margin-bottom:6px;">
-                CURRENTLY CONNECTED
-              </span>
-              <div style="font-weight:700; font-size:14px; color:#fff;">${t.carrier}</div>
-              <div style="font-size:12px; color:#94a3b8; font-family:monospace; margin-top:2px;">Cell ID: ${t.cellid} · eNodeB: ${t.enodeb}</div>
-              <div style="font-size:12px; color:#00FF66; font-weight:600; margin-top:4px;">Signal: ${t.rsrpDbm} dBm · ${t.distanceMeters} m away</div>
-            </div>
-          `);
-          marker.openPopup();
-        } else {
-          marker.bindPopup(`
-            <div style="padding: 2px;">
-              <div style="font-weight:700; font-size:13px; color:#fff;">${t.carrier}</div>
-              <div style="font-size:11px; color:#94a3b8; font-family:monospace; margin-top:2px;">Cell ID: ${t.cellid} · ${t.radio}</div>
-              <div style="font-size:11px; color:#cbd5e1; margin-top:3px;">Distance: ${t.distanceMeters} m</div>
-            </div>
-          `);
-        }
-
-        marker.on('click', () => showTowerDetails(t));
-        marker.addTo(map);
-        towerMarkers.push(marker);
-      });
-
-      // Update Connection Status in UI
       const statusEl = document.getElementById('connectionStatus');
       if (connectedTower) {
         statusEl.innerHTML = `
           <span class="dot-pulse"></span>
-          <span style="color:#00FF66;">Connected: ${connectedTower.carrier} (ID: ${connectedTower.cellid})</span>
+          <span style="color:#00FF66; font-weight:800;">CONNECTED: ${connectedTower.carrier} (ID: ${connectedTower.cellid})</span>
         `;
-
-        connectedLine = L.polyline([[userCoords.lat, userCoords.lon], [connectedTower.lat, connectedTower.lon]], {
-          color: '#00FF66',
-          weight: 2.5,
-          dashArray: '4, 6',
-          opacity: 0.9
-        }).addTo(map);
-      } else if (cleanInput.length > 0) {
-        statusEl.innerHTML = `<span style="color:#f59e0b;">No tower on map matches ID "${cleanInput}"</span>`;
+      } else if (inputVal.length > 0) {
+        statusEl.innerHTML = `<span style="color:#f59e0b;">No tower matches "${inputVal}"</span>`;
       } else {
         statusEl.innerHTML = `<span>Type Cell ID above or tap a tower</span>`;
       }
 
-      document.getElementById('towerCountLabel').textContent = allTowers.length + ' sites nearby';
+      allTowers.forEach(t => {
+        const isConn = connectedTower && t.id === connectedTower.id;
+        const icon = createTowerIcon(t, isConn);
+        const marker = L.marker([t.lat, t.lon], {
+          icon: icon,
+          zIndexOffset: isConn ? 1800 : 100
+        }).addTo(map);
+
+        marker.on('click', () => {
+          openSheet(t);
+        });
+
+        towerMarkers.push(marker);
+      });
+
+      // Neon Green connection vector line to Connected Tower
+      if (connectedTower) {
+        connectedLine = L.polyline([[userCoords.lat, userCoords.lon], [connectedTower.lat, connectedTower.lon]], {
+          color: '#00FF66',
+          weight: 3.5,
+          dashArray: '5, 6',
+          opacity: 0.95
+        }).addTo(map);
+
+        const midLat = (userCoords.lat + connectedTower.lat) / 2;
+        const midLon = (userCoords.lon + connectedTower.lon) / 2;
+        const midHtml = `<div class="midpoint-badge">⚡ ${formatDist(connectedTower.distanceMeters)} away</div>`;
+        const midIcon = L.divIcon({
+          className: 'mid-dist-icon',
+          html: midHtml,
+          iconSize: [120, 22],
+          iconAnchor: [60, 11]
+        });
+        midpointMarker = L.marker([midLat, midLon], { icon: midIcon, interactive: false }).addTo(map);
+      }
     }
 
-    function updateTowerDistances() {
-      allTowers.forEach(t => {
-        t.distanceMeters = getDistance(userCoords.lat, userCoords.lon, t.lat, t.lon);
-        t.rsrpDbm = calcRsrp(t.distanceMeters, t.radio);
-      });
-      allTowers.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    function openSheet(tower) {
+      activeTower = tower;
+      document.getElementById('sheetCarrier').textContent = tower.carrier;
+      document.getElementById('sheetType').textContent = `${tower.radio} Cellular · ${formatDist(tower.distanceMeters)} away`;
+      document.getElementById('specCellId').textContent = tower.cellid;
+      document.getElementById('specEnb').textContent = tower.enodeb || Math.floor(tower.cellid / 256);
+      document.getElementById('specRsrp').textContent = `${tower.rsrpDbm} dBm`;
+      document.getElementById('specDist').textContent = formatDist(tower.distanceMeters);
+      document.getElementById('specLac').textContent = tower.lac;
+      document.getElementById('specMccMnc').textContent = `${tower.mcc} / ${tower.mnc}`;
+      document.getElementById('towerSheet').classList.add('open');
+    }
+
+    function closeSheet() {
+      document.getElementById('towerSheet').classList.remove('open');
+    }
+
+    function loadMockTowers() {
+      const uLat = userCoords.lat;
+      const uLon = userCoords.lon;
+      
+      const generated = [
+        {
+          id: 'tower-connected',
+          lat: uLat + 0.0028,
+          lon: uLon + 0.0034,
+          cellid: 1849201,
+          enodeb: 7223,
+          mcc: 310,
+          mnc: 410,
+          lac: 2841,
+          radio: 'LTE',
+          carrier: 'Verizon Wireless LTE',
+          rangeMeters: 1400,
+          azimuth: 45
+        },
+        {
+          id: 'tower-2',
+          lat: uLat - 0.0042,
+          lon: uLon + 0.0051,
+          cellid: 2894103,
+          enodeb: 11305,
+          mcc: 310,
+          mnc: 260,
+          lac: 4892,
+          radio: '5G',
+          carrier: 'T-Mobile 5G UC',
+          rangeMeters: 1800,
+          azimuth: 120
+        },
+        {
+          id: 'tower-3',
+          lat: uLat + 0.0062,
+          lon: uLon - 0.0048,
+          cellid: 3910245,
+          enodeb: 15274,
+          mcc: 310,
+          mnc: 410,
+          lac: 2841,
+          radio: 'LTE',
+          carrier: 'AT&T Mobility LTE',
+          rangeMeters: 1200,
+          azimuth: 220
+        },
+        {
+          id: 'tower-4',
+          lat: uLat - 0.0058,
+          lon: uLon - 0.0062,
+          cellid: 4109283,
+          enodeb: 16051,
+          mcc: 310,
+          mnc: 260,
+          lac: 4892,
+          radio: '5G',
+          carrier: 'T-Mobile 5G UC',
+          rangeMeters: 2200,
+          azimuth: 300
+        },
+        {
+          id: 'tower-5',
+          lat: uLat + 0.0091,
+          lon: uLon + 0.0018,
+          cellid: 5821940,
+          enodeb: 22741,
+          mcc: 310,
+          mnc: 120,
+          lac: 1944,
+          radio: 'UMTS',
+          carrier: 'Sprint Legacy 3G',
+          rangeMeters: 900,
+          azimuth: 180
+        }
+      ];
+
+      allTowers = generated.map(t => {
+        const dist = getDistance(uLat, uLon, t.lat, t.lon);
+        return {
+          ...t,
+          distanceMeters: dist,
+          rsrpDbm: calcRsrp(dist, t.radio)
+        };
+      }).sort((a,b) => a.distanceMeters - b.distanceMeters);
+
       renderTowerMarkers();
     }
 
-    // Load Towers via API or Mock
     async function loadTowers() {
-      if (apiKey && apiKey.length > 5) {
-        try {
-          const delta = 0.05;
-          const url = `https://opencellid.org/cell/getInArea?key=${encodeURIComponent(apiKey)}&BBOX=${userCoords.lat - delta},\${userCoords.lon - delta},\${userCoords.lat + delta},\${userCoords.lon + delta}&format=json`;
-          const res = await fetch(url);
+      if (!apiKey) {
+        loadMockTowers();
+        return;
+      }
+      try {
+        const delta = 0.05;
+        const bbox = `${userCoords.lat - delta},${userCoords.lon - delta},${userCoords.lat + delta},${userCoords.lon + delta}`;
+        const url = `https://opencellid.org/cell/getInArea?key=${apiKey}&BBOX=${bbox}&format=json`;
+        const res = await fetch(url);
+        if (res.ok) {
           const data = await res.json();
           if (data && data.cells && data.cells.length > 0) {
             allTowers = data.cells.map((c, i) => {
-              const r = (c.radio || 'LTE').toUpperCase();
-              const radio = r.includes('5G') ? '5G' : 'LTE';
               const dist = getDistance(userCoords.lat, userCoords.lon, c.lat, c.lon);
-              const cellid = c.cellid || 1000 + i;
+              const radio = c.radio === 'UMTS' ? 'UMTS' : c.radio === 'GSM' ? 'GSM' : 'LTE';
               return {
-                id: 'cell-' + cellid,
-                lat: Number(c.lat),
-                lon: Number(c.lon),
-                radio,
-                carrier: 'Cell Site #' + cellid,
-                cellid: cellid,
-                enodeb: Math.floor(cellid / 256),
-                distanceMeters: dist,
-                rsrpDbm: calcRsrp(dist, radio),
-                lac: c.lac || 4092,
+                id: `api-${c.cellid || i}`,
+                lat: c.lat,
+                lon: c.lon,
+                cellid: c.cellid || (10000 + i),
+                enodeb: Math.floor((c.cellid || 10000) / 256),
                 mcc: c.mcc || 310,
-                mnc: c.mnc || 260
+                mnc: c.mnc || 410,
+                lac: c.lac || 1000,
+                radio: radio,
+                carrier: `Network MCC ${c.mcc}-${c.mnc}`,
+                rangeMeters: c.range || 1000,
+                azimuth: c.direction || 0,
+                distanceMeters: dist,
+                rsrpDbm: calcRsrp(dist, radio)
               };
-            });
-            updateTowerDistances();
+            }).sort((a,b) => a.distanceMeters - b.distanceMeters);
+            renderTowerMarkers();
             return;
           }
-        } catch (e) {
-          console.warn('API error, falling back to mock towers');
         }
+      } catch (e) {
+        console.warn('API error, falling back to mock towers:', e);
       }
       loadMockTowers();
     }
 
-    // High-Fidelity Mock Towers Engine
-    function loadMockTowers() {
-      const carriers = ['T-Mobile 5G/LTE', 'Verizon Wireless', 'AT&T Mobility', 'Regional Telecom'];
-      allTowers = [];
-
-      for (let i = 0; i < 22; i++) {
-        const distKm = 0.25 + (i * 0.28) + (Math.random() * 0.15);
-        const angle = (i * 137.5 * Math.PI) / 180;
-        const dLat = (distKm / 111) * Math.cos(angle);
-        const dLon = (distKm / (111 * Math.cos(userCoords.lat * Math.PI / 180))) * Math.sin(angle);
-        const distM = Math.round(distKm * 1000);
-        const radio = i % 3 === 0 ? '5G' : 'LTE';
-        const cellid = 149200 + i * 35;
-        const enodeb = Math.floor(cellid / 256);
-
-        allTowers.push({
-          id: 'tower-' + cellid,
-          lat: userCoords.lat + dLat,
-          lon: userCoords.lon + dLon,
-          radio,
-          carrier: carriers[i % carriers.length],
-          cellid: cellid,
-          enodeb: enodeb,
-          distanceMeters: distM,
-          rsrpDbm: calcRsrp(distM, radio),
-          lac: 4092,
-          mcc: 310,
-          mnc: 260
-        });
-      }
-
-      if (!connectedCellId && allTowers.length > 0) {
-        connectedCellId = String(allTowers[0].cellid);
-        document.getElementById('connectedCellInput').value = connectedCellId;
-      }
-
-      updateTowerDistances();
-    }
-
-    function showTowerDetails(t) {
-      activeTower = t;
-      document.getElementById('sheetCarrier').textContent = t.carrier;
-      document.getElementById('sheetType').textContent = `${t.radio} Cellular · ${t.distanceMeters} m away`;
-      document.getElementById('specCellId').textContent = t.cellid;
-      document.getElementById('specEnb').textContent = t.enodeb;
-      document.getElementById('specRsrp').textContent = t.rsrpDbm + ' dBm';
-      document.getElementById('specDist').textContent = t.distanceMeters + ' m';
-      document.getElementById('specLac').textContent = t.lac;
-      document.getElementById('specMccMnc').textContent = t.mcc + ' / ' + t.mnc;
-      document.getElementById('towerSheet').classList.add('open');
+    function updateTowerDistances() {
+      allTowers = allTowers.map(t => {
+        const dist = getDistance(userCoords.lat, userCoords.lon, t.lat, t.lon);
+        return {
+          ...t,
+          distanceMeters: dist,
+          rsrpDbm: calcRsrp(dist, t.radio)
+        };
+      }).sort((a,b) => a.distanceMeters - b.distanceMeters);
+      renderTowerMarkers();
     }
 
     // Event Listeners
-    document.getElementById('connectedCellInput').addEventListener('input', (e) => {
-      connectedCellId = e.target.value;
-      renderTowerMarkers();
-    });
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
 
-    document.getElementById('btnAutoConnect').addEventListener('click', () => {
-      if (allTowers.length > 0) {
-        connectedCellId = String(allTowers[0].cellid);
-        document.getElementById('connectedCellInput').value = connectedCellId;
+      const input = document.getElementById('connectedCellInput');
+      input.value = connectedCellId;
+      input.addEventListener('input', (e) => {
+        connectedCellId = e.target.value;
         renderTowerMarkers();
-        map.panTo([allTowers[0].lat, allTowers[0].lon], { animate: true });
-      }
+      });
+
+      document.getElementById('btnAutoConnect').addEventListener('click', () => {
+        if (allTowers.length > 0) {
+          connectedCellId = String(allTowers[0].cellid);
+          input.value = connectedCellId;
+          renderTowerMarkers();
+        }
+      });
+
+      // Recenter buttons
+      document.getElementById('btnRecenter').addEventListener('click', zoomToUserLocation);
+      document.getElementById('btnCardZoom').addEventListener('click', zoomToUserLocation);
+      document.getElementById('btnHeaderRecenter').addEventListener('click', zoomToUserLocation);
+
+      // Layer switcher
+      document.getElementById('btnToggleLayer').addEventListener('click', switchMapLayer);
+
+      // Sheet Actions
+      document.getElementById('btnCloseSheet').addEventListener('click', closeSheet);
+      document.getElementById('btnSetAsConnected').addEventListener('click', () => {
+        if (activeTower) {
+          connectedCellId = String(activeTower.cellid);
+          input.value = connectedCellId;
+          renderTowerMarkers();
+          closeSheet();
+        }
+      });
+
+      // API Modal
+      const modal = document.getElementById('settingsModal');
+      const inputKey = document.getElementById('inputApiKey');
+      document.getElementById('btnSettings').addEventListener('click', () => {
+        inputKey.value = apiKey;
+        modal.classList.add('open');
+      });
+      document.getElementById('btnCancelSettings').addEventListener('click', () => {
+        modal.classList.remove('open');
+      });
+      document.getElementById('btnSaveSettings').addEventListener('click', () => {
+        apiKey = inputKey.value.trim();
+        localStorage.setItem('opencellid_key', apiKey);
+        modal.classList.remove('open');
+        loadTowers();
+      });
+
+      // Clicking map deselects sheet
+      map.on('click', () => {
+        closeSheet();
+      });
+
+      map.on('dragstart', () => {
+        document.getElementById('btnRecenter').classList.remove('active');
+      });
     });
-
-    document.getElementById('btnSetAsConnected').addEventListener('click', () => {
-      if (activeTower) {
-        connectedCellId = String(activeTower.cellid);
-        document.getElementById('connectedCellInput').value = connectedCellId;
-        renderTowerMarkers();
-        document.getElementById('towerSheet').classList.remove('open');
-      }
-    });
-
-    document.getElementById('btnCloseSheet').addEventListener('click', () => {
-      document.getElementById('towerSheet').classList.remove('open');
-    });
-
-    document.getElementById('btnRecenter').addEventListener('click', () => {
-      map.panTo([userCoords.lat, userCoords.lon], { animate: true });
-    });
-
-    // Settings Modal
-    const modal = document.getElementById('settingsModal');
-    document.getElementById('btnSettings').onclick = () => {
-      document.getElementById('inputApiKey').value = apiKey;
-      modal.classList.add('open');
-    };
-    document.getElementById('btnCancelSettings').onclick = () => modal.classList.remove('open');
-    document.getElementById('btnSaveSettings').onclick = () => {
-      apiKey = document.getElementById('inputApiKey').value.trim();
-      localStorage.setItem('opencellid_key', apiKey);
-      modal.classList.remove('open');
-      loadTowers();
-    };
-
-    window.onload = initMap;
   </script>
 </body>
   </html>
